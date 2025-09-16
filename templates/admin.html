@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Gestão de Usuários{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="p-4 mb-4 text-sm {% if category == 'success' %}text-green-700 bg-green-100{% else %}text-red-700 bg-red-100{% endif %} rounded-lg" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="bg-white p-6 rounded-lg shadow mb-8">
+        <h2 class="text-xl font-bold mb-4">Criar Novo Usuário</h2>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700">Nome de Usuário</label>
+                <input type="text" name="username" id="username" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">Senha</label>
+                <input type="password" name="password" id="password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label for="filial" class="block text-sm font-medium text-gray-700">Filial</label>
+                <input type="text" name="filial" id="filial" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label for="role_id" class="block text-sm font-medium text-gray-700">Perfil de Acesso</label>
+                <select name="role_id" id="role_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <div class="flex items-start">
+                    <div class="flex items-center h-5">
+                        <input id="pode_ver_saldo" name="pode_ver_saldo" type="checkbox" checked class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="pode_ver_saldo" class="font-medium text-gray-700">Pode ver saldos</label>
+                        <p class="text-gray-500">Se marcado, o usuário verá o saldo do sistema durante a contagem.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="md:col-span-2">
+                <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Criar Usuário</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">Usuários Existentes</h2>
+            <a href="{{ url_for('manage_roles') }}" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg">
+                Gerenciar Perfis
+            </a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuário</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Filial</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Perfil</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vê Saldos?</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for user in users %}
+                    <tr>
+                        <td class="px-6 py-4">{{ user.username }}</td>
+                        <td class="px-6 py-4">{{ user.filial }}</td>
+                        <td class="px-6 py-4">{{ user.role_name }}</td>
+                        <td class="px-6 py-4">
+                            {% if user.pode_ver_saldo %}
+                                <span class="text-green-600 font-semibold">Sim</span>
+                            {% else %}
+                                <span class="text-red-600">Não</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="{{ url_for('edit_user', user_id=user.id) }}" class="text-indigo-600 hover:indigo-900">Editar</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

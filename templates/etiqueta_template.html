@@ -1,0 +1,71 @@
+<!-- templates/etiqueta_template.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Etiqueta {{ item.B1_COD }}</title>
+    <style>
+        @page {
+            size: 65mm 15mm;
+            margin: 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 65mm;
+            height: 15mm;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .content-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .qrcode {
+            flex-shrink: 0;
+            width: 12mm;
+            height: 12mm;
+            /* ALTERAÇÃO AQUI: Margem reduzida */
+            margin-right: 1mm;
+        }
+        .info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: left;
+            overflow: hidden;
+        }
+        .codigo {
+            font-size: 9pt;
+            font-weight: bold;
+            line-height: 1.1;
+        }
+        .descricao {
+            font-size: 7pt;
+            font-weight: bold;
+            line-height: 1.1;
+            max-width: 45mm; 
+            word-wrap: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <div class="qrcode">
+            <img src="{{ qrcode_url }}" style="width: 100%; height: 100%;">
+        </div>
+        <div class="info">
+            <div class="codigo">{{ item.B1_COD.strip() }}</div>
+            <div class="descricao">{{ item.B1_DESC.strip() }}</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Contagem Consolidada{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Contagem Consolidada por Almoxarifado</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white p-4 rounded-lg shadow">
+            <label for="session-select" class="block text-sm font-medium text-gray-700 mb-2">1. Selecione o Inventário Ativo</label>
+            <select id="session-select" class="w-full p-2 border border-gray-300 rounded-md">
+                <option value="">-- Selecione uma sessão --</option>
+                {% for sessao in sessoes %}
+                    <option value="{{ sessao.id }}">{{ sessao.descricao }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="bg-white p-4 rounded-lg shadow">
+            <label for="group-select" class="block text-sm font-medium text-gray-700 mb-2">2. Selecione o Almoxarifado</label>
+            <select id="group-select" class="w-full p-2 border border-gray-300 rounded-md">
+                <option value="">-- Selecione um grupo --</option>
+                {% for grupo in grupos %}
+                    <option value="{{ grupo }}">{{ grupo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div id="counting-area" class="opacity-50 pointer-events-none">
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <label for="barcode-input" class="block text-sm font-medium text-gray-700 mb-2">3. Leia o Código do Item</label>
+            <input type="text" id="barcode-input" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Aguardando seleções acima...">
+            <div id="loader" class="hidden loader mx-auto mt-4"></div>
+        </div>
+    </div>
+    
+    <div id="item-details" class="hidden bg-white p-6 rounded-lg shadow">
+        <div class="mb-4 pb-4 border-b">
+            <h2 id="item-description" class="text-2xl font-bold text-gray-800"></h2>
+            <div class="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                <span>Código: <strong id="item-code" class="text-gray-700"></strong></span>
+                <span>Unidade: <strong id="item-um" class="text-gray-700"></strong></span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Saldo Total do Sistema ({{ session.get('group_name_display', '') }})</label>
+                <p id="total-system-balance" class="text-2xl font-bold text-blue-600 mt-1 font-mono"></p>
+            </div>
+            <div>
+                <label for="total-quantity-input" class="block text-sm font-medium text-gray-700">4. Insira a Quantidade Total Contada</label>
+                <input type="number" step="any" id="total-quantity-input" class="mt-1 w-full p-2 border-2 border-gray-400 rounded-md text-xl">
+            </div>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+            <button id="save-button" class="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-bold text-lg">
+                Salvar Contagem
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Referências aos elementos
+    const sessionSelect = document.getElementById('session-select');
+    const groupSelect = document.getElementById('group-select');
+    const countingArea = document.getElementById('counting-area');
+    const barcodeInput = document.getElementById('barcode-input');
+    const loader = document.getElementById('loader');
+    const itemDetailsDiv = document.getElementById('item-details');
+    const saveButton = document.getElementById('save-button');
+    const totalQuantityInput = document.getElementById('total-quantity-input');
+    
+    let currentItemData = null;
+    const almoxarifadoGrupos = {{ ALMOXARIFADOS_GRUPO|tojson }};
+
+    function checkSelections() {
+        if (sessionSelect.value && groupSelect.value) {
+            countingArea.classList.remove('opacity-50', 'pointer-events-none');
+            barcodeInput.placeholder = "Leia ou digite o código do item...";
+        } else {
+            countingArea.classList.add('opacity-50', 'pointer-events-none');
+            barcodeInput.placeholder = "Aguardando seleções acima...";
+        }
+    }
+
+    sessionSelect.addEventListener('change', checkSelections);
+    groupSelect.addEventListener('change', checkSelections);
+    barcodeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') fetchAndDisplayItem();
+    });
+    saveButton.addEventListener('click', saveConsolidatedCount);
+
+    async function fetchAndDisplayItem() {
+        const barcode = barcodeInput.value.trim();
+        if (!barcode) return;
+
+        loader.classList.remove('hidden');
+        itemDetailsDiv.classList.add('hidden');
+        
+        try {
+            const response = await fetch(`/api/get_item_details?barcode=${barcode}`);
+            const data = await response.json();
+
+            if (!response.ok) throw new Error(data.error);
+
+            currentItemData = data;
+            const selectedGroup = groupSelect.value;
+            const filiaisDoGrupo = almoxarifadoGrupos[selectedGroup];
+
+            // Filtra as localizações para apenas as que pertencem ao grupo selecionado
+            const locationsInGroup = data.locations.filter(loc => filiaisDoGrupo.includes(loc.filial));
+            
+            // Calcula o saldo total para o grupo
+            const totalSystemBalance = locationsInGroup.reduce((sum, loc) => sum + parseFloat(loc.saldo_atual), 0);
+
+            // Preenche os campos
+            document.getElementById('item-code').textContent = barcode;
+            document.getElementById('item-description').textContent = data.description;
+            document.getElementById('item-um').textContent = data.unit_of_measure;
+            document.getElementById('total-system-balance').textContent = totalSystemBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            sessionStorage.setItem('group_name_display', selectedGroup); // Armazena para exibição
+
+            itemDetailsDiv.classList.remove('hidden');
+            totalQuantityInput.focus();
+
+        } catch (error) {
+            alert(`Erro: ${error.message}`);
+        } finally {
+            loader.classList.add('hidden');
+        }
+    }
+
+    async function saveConsolidatedCount() {
+        const payload = {
+            sessao_id: sessionSelect.value,
+            group_name: groupSelect.value,
+            item_code: barcodeInput.value.trim(),
+            total_quantity: totalQuantityInput.value
+        };
+
+        if (!payload.sessao_id || !payload.group_name || !payload.item_code || !payload.total_quantity) {
+            alert('Por favor, preencha todos os campos.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/save_consolidated_count', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            
+            if (!response.ok) throw new Error(result.error);
+
+            alert(result.success);
+            // Limpa para a próxima contagem
+            barcodeInput.value = '';
+            totalQuantityInput.value = '';
+            itemDetailsDiv.classList.add('hidden');
+            barcodeInput.focus();
+
+        } catch (error) {
+            alert(`Erro ao salvar: ${error.message}`);
+        }
+    }
+});
+</script>
+{% endblock %}

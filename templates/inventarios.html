@@ -1,0 +1,169 @@
+<!-- templates/inventarios.html -->
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Inventários{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Mensagens de Feedback -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-4">
+            {% for category, message in messages %}
+                <div class="p-4 rounded-md {% if category == 'success' %}bg-green-100 border-green-400 text-green-700{% else %}bg-red-100 border-red-400 text-red-700{% endif %}" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Formulário para Novo Inventário -->
+    <div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6">Abrir Novo Inventário</h1>
+        <form method="POST" action="{{ url_for('gerenciar_inventarios') }}">
+            <div class="flex flex-col sm:flex-row items-end space-y-4 sm:space-y-0 sm:space-x-4">
+                <div class="flex-grow w-full">
+                    <label for="descricao" class="block text-sm font-medium text-gray-700">Descrição</label>
+                    <input type="text" id="descricao" name="descricao" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Ex: Inventário Geral - Agosto 2025" required>
+                </div>
+                <button type="submit" class="w-full sm:w-auto bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-2 px-6 rounded-lg">
+                    Abrir
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Lista de Inventários -->
+    <div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold mb-6">Sessões de Inventário</h2>
+        
+        <!-- Layout de Tabela para Desktop -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for inv in inventarios %}
+                    <tr>
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-medium text-gray-900">{{ inv.descricao }}</p>
+                            <p class="text-xs text-gray-500">ID: {{ inv.id }} | Aberto em: {{ inv.data_abertura.strftime('%d/%m/%Y') }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm">
+                            {% if inv.status == 'Aberto' %}
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Aberto</span>
+                            {% else %}
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Fechado</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm font-medium whitespace-nowrap">
+                            <a href="{{ url_for('visualizar_inventario', sessao_id=inv.id) }}" class="text-blue-600 hover:text-blue-900 mr-4">Visualizar</a>
+                            <a href="{{ url_for('edit_inventario', sessao_id=inv.id) }}" class="text-gray-600 hover:text-gray-900 mr-4">Editar</a>
+                            
+                            {% if inv.status == 'Aberto' %}
+                                <form action="{{ url_for('fechar_inventario', sessao_id=inv.id) }}" method="POST" class="inline" onsubmit="return confirm('Tem certeza que deseja fechar este inventário?');">
+                                    <button type="submit" class="text-red-600 hover:text-red-900 mr-4">Fechar</button>
+                                </form>
+                            {% else %}
+                                <form action="{{ url_for('reabrir_inventario', sessao_id=inv.id) }}" method="POST" class="inline">
+                                    <button type="submit" class="text-green-600 hover:text-green-900 mr-4">Reabrir</button>
+                                </form>
+                                <a href="{{ url_for('exportar_excel', sessao_id=inv.id) }}" class="text-green-600 hover:text-green-900 mr-4">Exportar Excel</a>
+                            {% endif %}
+
+                            {% if session.get('role_name') == 'Admin' %}
+                                <form action="{{ url_for('excluir_inventario', sessao_id=inv.id) }}" method="POST" class="inline" onsubmit="return confirm('ATENÇÃO! Excluir um inventário marcará todos os seus dados como inativos. Esta ação não pode ser desfeita. Deseja continuar?');">
+                                    <button type="submit" class="text-red-600 hover:text-red-900">Excluir</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Layout de Cartões para Telemóvel -->
+        <div class="md:hidden space-y-4">
+            {% for inv in inventarios %}
+            <div class="bg-gray-50 p-4 rounded-lg border">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <p class="font-bold text-gray-800">{{ inv.descricao }}</p>
+                        <p class="text-xs text-gray-500">ID: {{ inv.id }} | Aberto em: {{ inv.data_abertura.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                    {% if inv.status == 'Aberto' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Aberto</span>
+                    {% else %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Fechado</span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-end flex-wrap gap-x-4 gap-y-2 border-t pt-3 mt-3 text-sm">
+                    <a href="{{ url_for('visualizar_inventario', sessao_id=inv.id) }}" class="text-blue-600 hover:text-blue-900">Visualizar</a>
+                    <a href="{{ url_for('edit_inventario', sessao_id=inv.id) }}" class="text-gray-600 hover:text-gray-900">Editar</a>
+                    {% if inv.status == 'Aberto' %}
+                    <form action="{{ url_for('fechar_inventario', sessao_id=inv.id) }}" method="POST" class="inline" onsubmit="return confirm('Tem certeza?');">
+                        <button type="submit" class="text-red-600 hover:text-red-900">Fechar</button>
+                    </form>
+                    {% else %}
+                    <form action="{{ url_for('reabrir_inventario', sessao_id=inv.id) }}" method="POST" class="inline">
+                        <button type="submit" class="text-green-600 hover:text-green-900">Reabrir</button>
+                    </form>
+                    <a href="{{ url_for('exportar_excel', sessao_id=inv.id) }}" class="text-green-600 hover:text-green-900">Excel</a>
+                    {% endif %}
+                    {% if session.get('role') == 'Admin' %}
+                    <form action="{{ url_for('excluir_inventario', sessao_id=inv.id) }}" method="POST" class="inline" onsubmit="return confirm('ATENÇÃO! Excluir um inventário marcará todos os seus dados como inativos. Deseja continuar?');">
+                        <button type="submit" class="text-red-600 hover:text-red-900">Excluir</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div id="emailModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Enviar Relatório por E-mail</h3>
+            <div class="mt-2 px-7 py-3">
+                <form id="emailForm" method="POST">
+                    <input type="email" id="recipient_email" name="recipient_email" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="email@destinatario.com" required>
+                </form>
+            </div>
+            <div class="items-center px-4 py-3">
+                <button id="cancelEmailBtn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md w-full sm:w-auto">Cancelar</button>
+                <button id="sendEmailBtn" class="px-4 py-2 bg-[#05B540] text-white rounded-md w-full sm:w-auto sm:ml-4 mt-2 sm:mt-0">Enviar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const emailModal = document.getElementById('emailModal');
+    const emailForm = document.getElementById('emailForm');
+    const cancelEmailBtn = document.getElementById('cancelEmailBtn');
+    const sendEmailBtn = document.getElementById('sendEmailBtn');
+
+    function openEmailModal(sessaoId) {
+        emailForm.action = `/inventario/enviar_email/${sessaoId}`;
+        emailModal.classList.remove('hidden');
+    }
+
+    function closeEmailModal() {
+        emailModal.classList.add('hidden');
+    }
+
+    cancelEmailBtn.addEventListener('click', closeEmailModal);
+    sendEmailBtn.addEventListener('click', () => {
+        emailForm.submit();
+    });
+</script>
+{% endblock %}

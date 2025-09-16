@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Inventário de Estoque{% endblock %}</title>
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #05B540;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .sidebar-scroll::-webkit-scrollbar { width: 6px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: #012E23; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #05B540; border-radius: 3px; }
+        
+        /* --- ESTILOS DO CHATBOT --- */
+        #chat-window { transition: transform 0.3s ease-out, opacity 0.3s ease-out; }
+        .chat-message { max-width: 80%; }
+        .user-message { background-color: #05B540; color: white; align-self: flex-end; }
+        .bot-message { background-color: #e5e7eb; color: #1f2937; align-self: flex-start; }
+        #chat-messages::-webkit-scrollbar { width: 5px; }
+        #chat-messages::-webkit-scrollbar-track { background: #f1f1f1; }
+        #chat-messages::-webkit-scrollbar-thumb { background: #888; }
+        #chat-messages::-webkit-scrollbar-thumb:hover { background: #555; }
+        .typing-indicator span {
+            height: 8px; width: 8px; background-color: #a0aec0;
+            border-radius: 50%; display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="relative min-h-screen md:flex">
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
+        <aside id="sidebar" class="w-64 flex-col bg-[#012E23] text-white fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-200 ease-in-out z-30 flex">
+            <div class="h-20 flex items-center justify-center border-b border-gray-700 flex-shrink-0">
+                <img src="{{ url_for('static', filename='logo/logo.png') }}" alt="Logo da Empresa" class="h-12">
+            </div>
+            
+            <nav class="flex-1 overflow-y-auto sidebar-scroll p-4">
+                <ul class="space-y-2">
+                    {% if 'dashboard' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('dashboard') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-barcode-line ri-lg mr-3"></i><span>Contagem Detalhada</span></a></li>
+                    {% endif %}
+                    {% if 'contagem_consolidada_page' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('contagem_consolidada_page') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-inbox-unarchive-line ri-lg mr-3"></i><span>Contagem Consolidada</span></a></li>
+                    {% endif %}
+                    {% if 'contagem_planejada' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('contagem_planejada') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-calendar-check-line ri-lg mr-3"></i><span>Contagem Planejada</span></a></li>
+                    {% endif %}
+                    {% if 'lista_recontagem' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('lista_recontagem') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-repeat-line ri-lg mr-3"></i><span>Recontagem</span></a></li>
+                    {% endif %}
+                    {% if 'gerar_etiquetas' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('gerar_etiquetas') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-qr-code-line ri-lg mr-3"></i><span>Gerar Etiquetas</span></a></li>
+                    {% endif %}
+                    
+                    {% if 'gerenciar_inventarios' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('gerenciar_inventarios') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-archive-line ri-lg mr-3"></i><span>Inventários</span></a></li>
+                    {% endif %}
+                    {% if 'selecionar_progress_dashboard' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('selecionar_progress_dashboard') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-line-chart-line ri-lg mr-3"></i><span>Progresso</span></a></li>
+                    {% endif %}
+                    {% if 'selecionar_inventario_analitico' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('selecionar_inventario_analitico') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-pie-chart-2-line ri-lg mr-3"></i><span>Dashboard Analítico</span></a></li>
+                    {% endif %}
+                    {% if 'analise_estoque_parado' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('analise_estoque_parado') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-stack-line ri-lg mr-3"></i><span>Estoque Parado</span></a></li>
+                    {% endif %}
+
+                    {% if 'admin' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('admin') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-user-settings-line ri-lg mr-3"></i><span>Admin (Usuários)</span></a></li>
+                    {% endif %}
+                    {% if 'manage_roles' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('manage_roles') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="ri-shield-user-line ri-lg mr-3"></i><span>Admin (Perfis)</span></a></li>
+                    {% endif %}
+                    {% if 'view_logs' in session.get('permissions', []) %}
+                        <li><a href="{{ url_for('view_logs') }}" class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors"><i class="fas fa-history ri-lg mr-3"></i><span>Logs da API</span></a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-700 flex-shrink-0">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 rounded-full bg-[#05B540] flex items-center justify-center font-bold text-xl">{{ username[0]|upper }}</div>
+                    <div class="ml-3"><p class="font-semibold">{{ username }}</p><p class="text-xs text-gray-400">{{ session.get('role_name') }}</p></div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="w-full flex items-center justify-center p-2 rounded-lg bg-[#FF6600] hover:bg-opacity-90 transition-colors"><i class="ri-logout-box-r-line mr-2"></i><span>Sair</span></a>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col">
+            <header class="md:hidden bg-white shadow-md p-4 flex justify-between items-center">
+                <button id="menu-btn" class="text-gray-700 focus:outline-none"><i class="ri-menu-line ri-xl"></i></button>
+                <h1 class="text-lg font-bold text-[#012E23]">Inventário</h1>
+            </header>
+            <main class="flex-1 p-6 lg:p-10 overflow-y-auto">
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="mb-4 space-y-2">
+                        {% for category, message in messages %}
+                            {% set bg_color = 'bg-blue-100 border-blue-500 text-blue-700' %} {# Padrão para 'info' #}
+                            {% if category == 'success' %}
+                                {% set bg_color = 'bg-green-100 border-green-500 text-green-700' %}
+                            {% elif category == 'error' %}
+                                {% set bg_color = 'bg-red-100 border-red-500 text-red-700' %}
+                            {% elif category == 'warning' %}
+                                {% set bg_color = 'bg-yellow-100 border-yellow-500 text-yellow-700' %}
+                            {% endif %}
+                            <div class="p-4 rounded-md border {{ bg_color }}" role="alert">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <button id="chat-fab" class="fixed bottom-6 right-6 bg-[#012E23] text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center focus:outline-none hover:bg-opacity-90 transition-transform transform hover:scale-110 z-40">
+        <i class="fas fa-robot fa-lg"></i>
+    </button>
+
+    <div id="chat-window" class="fixed bottom-24 right-6 w-96 h-[32rem] bg-white rounded-lg shadow-2xl flex flex-col z-40 transform translate-y-8 opacity-0 pointer-events-none">
+        <div class="flex justify-between items-center p-4 bg-[#012E23] text-white rounded-t-lg">
+            <h3 class="font-semibold text-lg">Chatbot IA</h3>
+            <button id="close-chat" class="focus:outline-none">&times;</button>
+        </div>
+        <div id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col space-y-3">
+            <div class="chat-message bot-message p-3 rounded-lg">
+                <p>Olá! Faça uma pergunta sobre os dados do inventário.</p>
+            </div>
+        </div>
+        <div class="p-4 border-t flex">
+            <input type="text" id="chat-input" placeholder="Digite a sua pergunta..." class="flex-1 px-3 py-2 border rounded-l-md focus:outline-none focus:ring-2 focus:ring-[#05B540]">
+            <button id="send-chat" class="bg-[#05B540] text-white px-4 py-2 rounded-r-md hover:bg-opacity-90 focus:outline-none">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuBtn = document.getElementById('menu-btn');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggleSidebar = () => {
+                sidebar.classList.toggle('-translate-x-full');
+                overlay.classList.toggle('hidden');
+            };
+            menuBtn.addEventListener('click', toggleSidebar);
+            overlay.addEventListener('click', toggleSidebar);
+        });
+    </script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatFab = document.getElementById('chat-fab');
+            const chatWindow = document.getElementById('chat-window');
+            const closeChatBtn = document.getElementById('close-chat');
+            const chatMessages = document.getElementById('chat-messages');
+            const chatInput = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-chat');
+            const toggleChat = () => {
+                chatWindow.classList.toggle('opacity-0');
+                chatWindow.classList.toggle('translate-y-8');
+                chatWindow.classList.toggle('pointer-events-none');
+            };
+            chatFab.addEventListener('click', toggleChat);
+            closeChatBtn.addEventListener('click', toggleChat);
+            const addMessage = (content, isUser) => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message p-3 rounded-lg ${isUser ? 'user-message' : 'bot-message'}`;
+                messageDiv.innerHTML = content;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
+            const showTypingIndicator = () => {
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'chat-message bot-message p-3 rounded-lg typing-indicator';
+                typingDiv.innerHTML = '<span></span><span></span><span></span>';
+                chatMessages.appendChild(typingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
+            const removeTypingIndicator = () => {
+                const indicator = document.getElementById('typing-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+            };
+            const handleSend = async () => {
+                const userText = chatInput.value.trim();
+                if (!userText) return;
+                addMessage(userText, true);
+                chatInput.value = '';
+                showTypingIndicator();
+                try {
+                    const response = await fetch('/api/ask_chatbot', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: userText })
+                    });
+                    removeTypingIndicator();
+                    if (!response.ok) {
+                        throw new Error(`Erro: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    addMessage(data.answer, false);
+                } catch (error) {
+                    removeTypingIndicator();
+                    addMessage('Desculpe, ocorreu um erro ao contactar a IA. Tente novamente.', false);
+                    console.error('Chatbot error:', error);
+                }
+            };
+            sendBtn.addEventListener('click', handleSend);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleSend();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

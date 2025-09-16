@@ -1,0 +1,57 @@
+<!-- templates/login.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Inventário de Estoque</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex min-h-screen">
+        <!-- Painel da Marca (Esquerda) -->
+        <div class="w-1/2 bg-[#012E23] text-white flex flex-col justify-center items-center p-12 hidden md:flex">
+            <!-- ALTERAÇÃO AQUI: Aponta para o seu logótipo local -->
+            <img src="{{ url_for('static', filename='logo/logo.png') }}" ... >
+            <h1 class="text-3xl font-bold mb-4 text-center">Sistema de Inventário Inteligente</h1>
+            <p class="text-gray-300 text-center max-w-sm">Otimize sua contagem de estoque com precisão e agilidade.</p>
+        </div>
+
+        <!-- Painel do Formulário (Direita) -->
+        <div class="w-full md:w-1/2 flex justify-center items-center p-8">
+            <div class="w-full max-w-md">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2 text-center md:text-left">Bem-vindo de volta!</h2>
+                <p class="text-gray-600 mb-8 text-center md:text-left">Por favor, insira suas credenciais para continuar.</p>
+                
+                {% if error %}
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
+                    <p>{{ error }}</p>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-4">
+                        <label for="username" class="block text-gray-700 text-sm font-bold mb-2">Usuário</label>
+                        <input type="text" id="username" name="username" class="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-[#05B540]" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="password" class="block text-gray-700 text-sm font-bold mb-2">Senha</label>
+                        <input type="password" id="password" name="password" class="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-[#05B540]" required>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <button type="submit" class="w-full bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-200">
+                            Entrar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

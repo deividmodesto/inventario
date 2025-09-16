@@ -1,0 +1,167 @@
+<!-- templates/contagem_planejada.html -->
+{% extends "base.html" %}
+
+{% block title %}Contagem Planejada{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+    <h1 class="text-2xl font-bold mb-6">Contagem Planejada</h1>
+
+    <div class="mb-8 p-4 border rounded-lg bg-gray-50">
+        <form method="POST" action="{{ url_for('contagem_planejada') }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
+                <div class="lg:col-span-3">
+                    <label for="sessao_id" class="block text-sm font-medium text-gray-700">Selecione o Inventário Ativo</label>
+                    <select id="sessao_id" name="sessao_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" required>
+                        <option value="">-- Selecione uma sessão de inventário --</option>
+                        {% for sessao in sessoes %}
+                        <option value="{{ sessao.id }}" {% if sessao.id|string == sessao_selecionada %}selected{% endif %}>{{ sessao.descricao }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="data_inicial" class="block text-sm font-medium text-gray-700">Data Inicial</label>
+                    <input type="date" id="data_inicial" name="data_inicial" value="{{ data_inicial_pesquisada }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                </div>
+                <div>
+                    <label for="data_final" class="block text-sm font-medium text-gray-700">Data Final</label>
+                    <input type="date" id="data_final" name="data_final" value="{{ data_final_pesquisada }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                </div>
+                <div>
+                    <button type="submit" class="w-full bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-2 px-4 rounded-lg">
+                        Buscar Itens
+                    </button>
+                </div>
+                <div class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                        <label for="select-grupos" class="block text-sm font-medium text-gray-700">Grupos (opcional)</label>
+                        <select id="select-grupos" name="grupos" multiple placeholder="Todos..."></select>
+                    </div>
+                    <div>
+                        <label for="select-filiais" class="block text-sm font-medium text-gray-700">Filiais (opcional)</label>
+                        <select id="select-filiais" name="filiais" multiple placeholder="Todas...">
+                            {% for filial in filiais %}
+                                <option value="{{ filial }}" {% if filial in filiais_selecionadas %}selected{% endif %}>{{ filial }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="select-locais" class="block text-sm font-medium text-gray-700">Armazéns (opcional)</label>
+                        <select id="select-locais" name="locais" multiple placeholder="Todos...">
+                            {% for local in locais %}
+                                <option value="{{ local }}" {% if local in locais_selecionados %}selected{% endif %}>{{ local }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if itens is not none %}
+    <div>
+        <h2 class="text-2xl font-bold mb-6">Itens a serem contados</h2>
+        <div class="hidden md:block overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última Mov.</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ação</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for item in itens %}
+                    <tr>
+                        <td class="px-6 py-4">
+                            {% if item.StatusContagem == 'Contado' %}<span class="h-3 w-3 rounded-full bg-green-500 inline-block" title="Contado"></span>
+                            {% else %}<span class="h-3 w-3 rounded-full bg-gray-400 inline-block" title="Pendente"></span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm font-medium text-gray-900">
+                            <a href="{{ url_for('item_history', item_code=item.B2_COD.strip()) }}" class="text-blue-600 hover:underline" title="Ver Histórico">{{ item.B2_COD.strip() }}</a>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">{{ item.B1_DESC.strip() }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500">{{ item.UltimaMov }}</td>
+                        <td class="px-6 py-4 text-sm font-medium">
+                            <a href="{{ url_for('dashboard', item_code=item.B2_COD.strip(), from_planner=1) }}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-xs">
+                                Contar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="md:hidden space-y-4">
+            {% for item in itens %}
+            <div class="bg-gray-50 p-4 rounded-lg border">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="font-bold text-gray-800">
+                            <a href="{{ url_for('item_history', item_code=item.B2_COD.strip()) }}" class="text-blue-600 hover:underline" title="Ver Histórico">{{ item.B2_COD.strip() }}</a>
+                        </p>
+                        <p class="text-sm text-gray-600">{{ item.B1_DESC.strip() }}</p>
+                    </div>
+                    {% if item.StatusContagem == 'Contado' %}<span class="h-3 w-3 rounded-full bg-green-500 flex-shrink-0 ml-2" title="Contado"></span>
+                    {% else %}<span class="h-3 w-3 rounded-full bg-gray-400 flex-shrink-0 ml-2" title="Pendente"></span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-between items-center border-t pt-3">
+                    <p class="text-xs text-gray-500">Última Mov.: <span class="font-medium">{{ item.UltimaMov }}</span></p>
+                    <a href="{{ url_for('dashboard', item_code=item.B2_COD.strip(), from_planner=1) }}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-xs">
+                        Contar
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if not itens %}
+        <div class="text-center py-8 text-gray-500"><p>Nenhum item encontrado para o critério selecionado.</p></div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const commonSettings = {
+            plugins: ['remove_button'],
+            create: false,
+        };
+
+        new TomSelect('#select-filiais', commonSettings);
+        new TomSelect('#select-locais', commonSettings);
+
+        new TomSelect('#select-grupos',{
+            ...commonSettings,
+            valueField: 'value',
+            labelField: 'text',
+            searchField: 'text',
+            preload: true,
+            load: function(query, callback) {
+                fetch('{{ url_for("get_grupos") }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        callback(data);
+                        const selectedGroups = {{ grupos_selecionados|tojson }};
+                        if (selectedGroups) { this.setValue(selectedGroups); }
+                        this.settings.placeholder = 'Todos...';
+                        this.updatePlaceholder();
+                    }).catch(() => {
+                        this.settings.placeholder = 'Erro ao carregar.';
+                        this.updatePlaceholder();
+                        callback();
+                    });
+            }
+        });
+    });
+</script>
+{% endblock %}

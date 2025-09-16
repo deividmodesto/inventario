@@ -1,0 +1,30 @@
+<!-- templates/selecionar_analise.html -->
+{% extends "base.html" %}
+
+{% block title %}Selecionar Inventário para Análise{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Dashboard Analítico</h1>
+    <p class="text-gray-600 mb-8">Selecione um inventário fechado para visualizar os dados consolidados e os gráficos de análise.</p>
+
+    <!-- Lista de Inventários Fechados -->
+    <div class="space-y-4">
+        {% for inv in inventarios %}
+        <a href="{{ url_for('dashboard_analitico', sessao_id=inv.id) }}" class="block p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border transition-colors">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="font-bold text-gray-800">{{ inv.descricao }}</p>
+                    <p class="text-sm text-gray-500">Fechado em: {{ inv.data_fechamento.strftime('%d/%m/%Y %H:%M') if inv.data_fechamento else 'N/A' }}</p>
+                </div>
+                <i class="ri-arrow-right-s-line text-gray-400"></i>
+            </div>
+        </a>
+        {% else %}
+        <div class="text-center py-8 text-gray-500">
+            <p>Nenhum inventário fechado encontrado para análise.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

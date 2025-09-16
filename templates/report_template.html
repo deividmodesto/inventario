@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Inventário</title>
+    <style>
+        @page { size: A4 landscape; margin: 1cm; }
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9pt; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #012E23; padding-bottom: 10px; margin-bottom: 20px; }
+        .header img { max-height: 50px; }
+        .header .title { text-align: right; }
+        h1 { margin: 0; font-size: 24pt; color: #012E23; }
+        h2 { font-size: 16pt; color: #012E23; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px; }
+        h3 { font-size: 12pt; color: #333; margin-top: 15px; margin-bottom: 5px; }
+        .info { font-size: 10pt; color: #555; }
+        .grid-container { display: flex; justify-content: space-between; width: 100%; gap: 20px; }
+        .grid-col { flex: 1; }
+        .card { background-color: #f9f9f9; border: 1px solid #eee; border-radius: 5px; padding: 10px; margin-bottom: 10px; }
+        .card .label { font-size: 8pt; color: #666; margin-bottom: 2px; }
+        .card .value { font-size: 16pt; font-weight: bold; }
+        .card .value.green { color: #05B540; }
+        .card .value.red { color: #FF6600; }
+        .card .value.blue { color: #007bff; }
+        .card .value.purple { color: #6f42c1; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #ddd; padding: 5px; text-align: left; vertical-align: top; }
+        thead { background-color: #012E23; color: white; display: table-header-group; }
+        .numeric { text-align: right; font-family: monospace; }
+        .sub-info { font-size: 7pt; color: #666; }
+        .ranking-list { list-style: none; padding: 0; margin: 0; }
+        .ranking-list li { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_url }}" alt="Logo">
+            <h1>Relatório de Inventário</h1>
+            <p class="info"><strong>Descrição:</strong> {{ inventario.descricao }}</p>
+            <p class="info"><strong>Período:</strong> {{ inventario.data_abertura.strftime('%d/%m/%Y') }} a {{ inventario.data_fechamento.strftime('%d/%m/%Y') if inventario.data_fechamento else 'Aberto' }}</p>
+        </div>
+    </div>
+
+    <h2>Resumo Analítico</h2>
+    <div class="grid-container">
+        <div class="grid-col">
+            <div class="card">
+                <div class="label">Acurácia do Inventário</div>
+                <div class="value blue">{{ "%.2f"|format(metricas.Acuracia) }}%</div>
+            </div>
+            <div class="card">
+                <div class="label">Valor do Estoque Apurado</div>
+                <div class="value purple">{{ metricas.ValorApurado|currency }}</div>
+            </div>
+        </div>
+        <div class="grid-col">
+            <div class="card">
+                <div class="label">Valor Saldo Sistema</div>
+                <div class="value">{{ metricas.ValorTotalSistema|currency }}</div>
+            </div>
+        </div>
+        <div class="grid-col">
+            <div class="card">
+                <div class="label">Valor Total em Sobra</div>
+                <div class="value green">{{ metricas.ValorSobra|currency }}</div>
+            </div>
+             <div class="card">
+                <div class="label">Valor Total em Falta</div>
+                <div class="value red">{{ metricas.ValorFalta|currency }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <div class="grid-col">
+            <h3>Top 5 Maiores Faltas (em Valor)</h3>
+            <ul class="ranking-list">
+                {% for item in top_faltas %}
+                <li><span>{{ item.codigo }} - {{ item.descricao[:30] }}...</span> <span class="numeric red">{{ item.valor|currency }}</span></li>
+                {% else %}<li>Nenhuma falta significativa.</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="grid-col">
+            <h3>Top 5 Maiores Sobras (em Valor)</h3>
+             <ul class="ranking-list">
+                {% for item in top_sobras %}
+                <li><span>{{ item.codigo }} - {{ item.descricao[:30] }}...</span> <span class="numeric green">{{ item.valor|currency }}</span></li>
+                {% else %}<li>Nenhuma sobra significativa.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <h2>Detalhamento Completo</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Item / Descrição</th><th>Filial/Local</th><th class="numeric">Custo Unit.</th>
+                <th class="numeric">Saldo Sistema</th><th class="numeric">Qtd. Contada</th><th class="numeric">Diferença</th><th>Usuário</th><th>Num.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grupo in contagens_agrupadas %}
+                {% for contagem in grupo %}
+                <tr>
+                    {% if loop.first %}
+                        <td rowspan="{{ grupo|length }}"><b>{{ contagem.codigo_item }}</b><div class="sub-info">{{ contagem.B1_DESC }}</div></td>
+                        <td rowspan="{{ grupo|length }}">{{ contagem.filial }}/{{ contagem.local }}</td>
+                        <td class="numeric" rowspan="{{ grupo|length }}">{{ contagem.custo_unitario|currency }}</td>
+                    {% endif %}
+                    <td class="numeric">{{ "%.2f"|format(contagem.saldo_sistema) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(contagem.quantidade_contada) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(contagem.diferenca) }}</td>
+                    <td>{{ contagem.username }}</td>
+                    <td>{{ contagem.numero_contagem }}ª</td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Editar Usuário{% endblock %}
+{% block content %}
+<div class="space-y-8">
+    <div class="bg-white p-6 rounded-lg shadow">
+        <h1 class="text-2xl font-bold mb-4">Editar Usuário: {{ user.username }}</h1>
+        <form method="POST" action="{{ url_for('edit_user', user_id=user.id) }}" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700">Nome de Usuário</label>
+                <input type="text" name="username" id="username" value="{{ user.username }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label for="filial" class="block text-sm font-medium text-gray-700">Filial</label>
+                <input type="text" name="filial" id="filial" value="{{ user.filial }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            </div>
+            <div>
+                <label for="role_id" class="block text-sm font-medium text-gray-700">Função</label>
+                <select name="role_id" id="role_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {% if user.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                 <div class="flex items-start">
+                     <div class="flex items-center h-5">
+                         <input id="pode_ver_saldo" name="pode_ver_saldo" type="checkbox" 
+                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                {% if user.pode_ver_saldo %}checked{% endif %}>
+                     </div>
+                     <div class="ml-3 text-sm">
+                         <label for="pode_ver_saldo" class="font-medium text-gray-700">Pode ver saldos</label>
+                         <p class="text-gray-500">Se marcado, o usuário verá o saldo do sistema durante a contagem.</p>
+                     </div>
+                 </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Salvar Alterações</button>
+                <a href="{{ url_for('admin') }}" class="text-gray-600">Cancelar</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-4">Resetar Senha</h2>
+        <form method="POST" action="{{ url_for('reset_password', user_id=user.id) }}" onsubmit="return confirm('Tem certeza que deseja resetar a senha deste usuário?');">
+            <div class="space-y-4">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Nova Senha</label>
+                    <input type="password" name="password" id="password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <button type="submit" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">Resetar Senha</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="bg-red-50 p-6 rounded-lg shadow border border-red-200">
+        <h2 class="text-xl font-semibold text-red-800 mb-4">Zona de Perigo</h2>
+        <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" onsubmit="return confirm('Atenção: Esta ação é irreversível. Tem certeza que deseja excluir este usuário?');">
+            <p class="text-sm text-red-700 mb-4">Excluir este usuário permanentemente. Esta ação não pode ser desfeita.</p>
+            <button type="submit" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Excluir Usuário</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

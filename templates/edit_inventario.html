@@ -1,0 +1,27 @@
+<!-- templates/edit_inventario.html -->
+{% extends "base.html" %}
+
+{% block title %}Editar Inventário{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Editar Inventário #{{ inventario.id }}</h1>
+
+    <form method="POST" action="{{ url_for('edit_inventario', sessao_id=inventario.id) }}">
+        <div class="space-y-4">
+            <div>
+                <label for="descricao" class="block text-sm font-medium text-gray-700">Descrição do Inventário</label>
+                <input type="text" id="descricao" name="descricao" value="{{ inventario.descricao }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+            </div>
+            <div class="flex justify-end pt-4 space-x-4">
+                <a href="{{ url_for('gerenciar_inventarios') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                    Cancelar
+                </a>
+                <button type="submit" class="bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-2 px-4 rounded-lg">
+                    Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

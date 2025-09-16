@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Etiquetas para Zebra</title>
+    <style>
+        @page {
+            /* Confirme as medidas da sua etiqueta aqui */
+            size: 100mm 50mm; 
+            margin: 2mm;
+        }
+        html, body {
+            font-family: sans-serif;
+            font-size: 8pt;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+            height: 100%; 
+        }
+        .etiqueta {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            page-break-after: always;
+        }
+        .etiqueta:last-child {
+            page-break-after: auto;
+        }
+
+        /* ===== ESTILO DA IMAGEM ATUALIZADO ===== */
+        .etiqueta img {
+            max-width: 90%;
+            max-height: 15mm; 
+            object-fit: contain;
+            margin-bottom: 1.5mm;
+            
+            /* Linhas adicionadas para garantir a centralização */
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        /* ======================================= */
+
+        .item-code {
+            font-weight: bold;
+            font-size: 9pt;
+        }
+        .item-desc {
+            font-size: 7pt;
+            margin-top: 1mm;
+            width: 95%; 
+            overflow-wrap: break-word; 
+        }
+    </style>
+</head>
+<body>
+    {% for etiqueta in etiquetas %}
+        <div class="etiqueta">
+            <img src="{{ etiqueta.image_url }}" alt="Código do Produto">
+            <div class="item-code">{{ etiqueta.item.B1_COD.strip() }}</div>
+            <div class="item-desc">{{ etiqueta.item.B1_DESC.strip() }}</div>
+        </div>
+    {% endfor %}
+</body>
+</html>

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Perfil: {{ role.name }}{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-2">Editar Perfil</h1>
+    <p class="text-gray-500 mb-6">Você está editando as permissões para o perfil: <span class="font-bold text-gray-800">{{ role.name }}</span></p>
+
+    <form method="POST" action="{{ url_for('edit_role', role_id=role.id) }}">
+        <div class="space-y-6">
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">Nome do Perfil</label>
+                <input type="text" id="name" name="name" value="{{ role.name }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required {% if role.name == 'Admin' %}readonly{% endif %}>
+                {% if role.name == 'Admin' %}<p class="text-xs text-gray-500 mt-1">O nome do perfil "Admin" não pode ser alterado.</p>{% endif %}
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Permissões de Acesso ao Menu</label>
+                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border rounded-md p-4">
+                    {% for endpoint, name in available_menus.items() %}
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="{{ endpoint }}" name="permissions" value="{{ endpoint }}" type="checkbox"
+                                   class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                   {% if endpoint in current_permissions %}checked{% endif %}
+                                   {% if role.name == 'Admin' %}disabled{% endif %}>
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="{{ endpoint }}" class="font-medium text-gray-700">{{ name }}</label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                 {% if role.name == 'Admin' %}<p class="text-xs text-gray-500 mt-1">O perfil "Admin" sempre tem acesso a todos os menus.</p>{% endif %}
+            </div>
+
+            <div class="flex justify-end pt-4 space-x-4">
+                <a href="{{ url_for('manage_roles') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                    Cancelar
+                </a>
+                <button type="submit" class="bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-2 px-4 rounded-lg">
+                    Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

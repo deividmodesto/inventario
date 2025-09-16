@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Inventário{% endblock %}
+
+{% block content %}
+<div id="message-area" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4"></div>
+
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold">Contagem de Estoque</h1>
+        <button id="close-and-return-btn" class="hidden bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm">
+            Voltar à Lista
+        </button>
+    </div>
+
+    <div class="mb-6">
+        <label for="inventory-session" class="block text-sm font-medium text-gray-700">Selecione um Inventário para Contagem</label>
+        <select id="inventory-session" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="">-- Selecione uma sessão --</option>
+            {% for sessao in sessoes %}
+            <option value="{{ sessao.id }}">{{ sessao.descricao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="counting-area" class="opacity-50 pointer-events-none">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div>
+                <label for="barcode-input" class="block text-sm font-medium text-gray-700">Escanear ou Digitar Código do Item</label>
+                <input type="text" id="barcode-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="Selecione um inventário acima..." disabled>
+            </div>
+            <div>
+                 <button id="start-scan-btn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg" disabled>
+                     Escanear com a Câmera
+                </button>
+            </div>
+        </div>
+        <div id="loader" class="hidden loader mx-auto mt-4"></div>
+        
+        <div id="reader-container" class="mt-4 relative rounded-lg overflow-hidden" style="display: none;">
+            <div id="reader" class="border-4 border-gray-300 rounded-lg"></div>
+            <div class="absolute bottom-0 left-0 w-full p-4 bg-black bg-opacity-50 flex justify-around items-center">
+                <button id="capture-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full focus:outline-none focus:shadow-outline transition duration-150 disabled:bg-gray-400" disabled>Capturar</button>
+                <button id="stop-scan-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Parar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-details" class="mt-6 border rounded-lg bg-gray-50 hidden">
+        <div class="p-6">
+            <div class="flex items-baseline space-x-6 mb-1">
+                <h2 class="text-lg font-semibold text-gray-800">Item: <span id="item-code" class="text-blue-600"></span></h2>
+                <p class="text-sm text-gray-600">Unidade: <strong id="item-um" class="text-gray-800"></strong></p>
+            </div>
+            <p id="item-description" class="text-md text-gray-600 font-medium mb-4 bg-gray-100 p-2 rounded"></p>
+            
+            <div class="hidden md:block">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Filial</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Local</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Localização</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Saldo Sistema</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qtd. Contada</th>
+                        </tr>
+                    </thead>
+                    <tbody id="locations-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+
+            <div id="locations-card-container" class="md:hidden space-y-4"></div>
+
+        </div>
+        <div class="bg-gray-100 p-4 flex justify-end">
+             <button id="save-button" class="bg-[#05B540] hover:bg-opacity-90 text-white font-bold py-2 px-6 rounded-lg">
+                 Salvar Contagens
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- LÓGICA DE GRUPOS E CORES ---
+    const almoxarifadoGrupos = {{ ALMOXARIFADOS_GRUPO|tojson }};
+    const filialToGroupMap = {};
+    const groupColors = {
+        'Grãos': 'bg-yellow-50',
+        'Cana': 'bg-green-50',
+        'Armazém': 'bg-blue-50',
+    };
+    for (const groupName in almoxarifadoGrupos) {
+        if (almoxarifadoGrupos[groupName].length > 1) { 
+            almoxarifadoGrupos[groupName].forEach(filial => {
+                filialToGroupMap[filial] = groupName;
+            });
+        }
+    }
+
+    function displayItemDetails(data) {
+        const { description, locations, unit_of_measure, can_see_balance } = data;
+        itemCodeSpan.textContent = currentItemCode;
+        itemDescriptionP.textContent = description;
+        itemUmStrong.textContent = unit_of_measure;
+        locationsTableBody.innerHTML = '';
+        locationsCardContainer.innerHTML = '';
+
+        if (!locations || locations.length === 0) {
+            showMessage('info', 'Item sem posições de estoque.');
+            itemDetailsDiv.classList.remove('hidden');
+            return;
+        }
+        
+        locations.forEach(loc => {
+            const saldoDisplay = can_see_balance ? parseFloat(loc.saldo_atual).toLocaleString('pt-BR') : '--';
+            
+            const groupName = filialToGroupMap[loc.filial.trim()];
+            const highlightClass = groupName ? groupColors[groupName] || '' : '';
+
+            const tableRow = document.createElement('tr');
+            tableRow.className = highlightClass; 
+            tableRow.setAttribute('data-location-item', 'true');
+            tableRow.dataset.filial = loc.filial;
+            tableRow.dataset.local = loc.local;
+            tableRow.dataset.saldo = loc.saldo_atual;
+            tableRow.innerHTML = `
+                <td class="px-6 py-4 text-sm font-medium text-gray-900">${loc.filial}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">${loc.local}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">${loc.shelf_location}</td>
+                <td class="px-6 py-4 text-sm text-gray-500 font-mono">${saldoDisplay}</td>
+                <td class="px-6 py-4"><input type="number" step="any" class="counted-qty-input mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm"></td>
+            `;
+            locationsTableBody.appendChild(tableRow);
+
+            const cardDiv = document.createElement('div');
+            cardDiv.className = `p-4 rounded-lg border ${highlightClass}`; 
+            cardDiv.setAttribute('data-location-item', 'true');
+            cardDiv.dataset.filial = loc.filial;
+            cardDiv.dataset.local = loc.local;
+            cardDiv.dataset.saldo = loc.saldo_atual;
+            cardDiv.innerHTML = `
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div>
+                        <p class="text-xs text-gray-500">Filial</p>
+                        <p class="font-medium text-gray-800">${loc.filial}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">Local</p>
+                        <p class="font-medium text-gray-800">${loc.local}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">Localização</p>
+                        <p class="font-medium text-gray-800">${loc.shelf_location}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">Saldo Sistema</p>
+                        <p class="font-medium text-gray-800 font-mono">${saldoDisplay}</p>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700">Qtd. Contada</label>
+                        <input type="number" step="any" class="counted-qty-input mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+            `;
+            locationsCardContainer.appendChild(cardDiv);
+        });
+
+        itemDetailsDiv.classList.remove('hidden');
+        const firstQtyInput = document.querySelector('.counted-qty-input');
+        if(firstQtyInput) {
+            firstQtyInput.focus();
+        }
+    }
+    
+    // --- O RESTO DO SEU JAVASCRIPT PERMANECE IGUAL ---
+    const sessionSelect = document.getElementById('inventory-session');
+    const countingArea = document.getElementById('counting-area');
+    const barcodeInput = document.getElementById('barcode-input');
+    const startScanBtn = document.getElementById('start-scan-btn');
+    const itemDetailsDiv = document.getElementById('item-details');
+    const loader = document.getElementById('loader');
+    const messageArea = document.getElementById('message-area');
+    const itemCodeSpan = document.getElementById('item-code');
+    const itemDescriptionP = document.getElementById('item-description');
+    const itemUmStrong = document.getElementById('item-um');
+    const locationsTableBody = document.getElementById('locations-table-body');
+    const locationsCardContainer = document.getElementById('locations-card-container');
+    const saveButton = document.getElementById('save-button');
+    const readerContainer = document.getElementById('reader-container');
+    const readerDiv = document.getElementById('reader');
+    const stopScanBtn = document.getElementById('stop-scan-btn');
+    const captureBtn = document.getElementById('capture-btn');
+    const closeBtn = document.getElementById('close-and-return-btn');
+
+    let currentItemCode = '';
+    let selectedSessionId = null;
+    let html5QrCode = null;
+    let lastDetectedCode = null;
+    let isScanningCooldown = false;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const isFromPlanner = urlParams.has('from_planner');
+    if (isFromPlanner) {
+        closeBtn.classList.remove('hidden');
+    }
+    closeBtn.addEventListener('click', () => {
+        window.close();
+    });
+
+    sessionSelect.addEventListener('change', function() {
+        selectedSessionId = this.value;
+        if (selectedSessionId) {
+            countingArea.classList.remove('opacity-50', 'pointer-events-none');
+            barcodeInput.disabled = false;
+            startScanBtn.disabled = false;
+            barcodeInput.placeholder = "Aguardando código...";
+            barcodeInput.focus();
+            checkForUrlItemCode();
+        } else {
+            countingArea.classList.add('opacity-50', 'pointer-events-none');
+            barcodeInput.disabled = true;
+            startScanBtn.disabled = true;
+            barcodeInput.placeholder = "Selecione um inventário acima...";
+            resetState();
+        }
+    });
+
+    barcodeInput.addEventListener('change', () => fetchItemData(barcodeInput.value.trim()));
+    saveButton.addEventListener('click', saveCountData);
+    startScanBtn.addEventListener('click', startScanning);
+    stopScanBtn.addEventListener('click', stopScanning);
+    captureBtn.addEventListener('click', captureCode);
+    
+    function startScanning() {
+        readerContainer.style.display = 'block';
+        startScanBtn.style.display = 'none';
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+        
+        html5QrCode.start({ facingMode: "environment" }, config, onCodeDetected, onScanFailure)
+            .catch(() => {
+                html5QrCode.start({ }, config, onCodeDetected, onScanFailure)
+                    .catch(() => {
+                        showMessage('error', 'Não foi possível acessar a câmera.');
+                        stopScanning();
+                    });
+            });
+    }
+
+    function onCodeDetected(decodedText, decodedResult) {
+        if (isScanningCooldown) return;
+        isScanningCooldown = true;
+        lastDetectedCode = decodedText;
+        readerDiv.classList.remove('border-gray-300');
+        readerDiv.classList.add('border-green-500');
+        captureBtn.disabled = false;
+        setTimeout(() => { isScanningCooldown = false; }, 1000);
+    }
+
+    function onScanFailure(error) {
+        if (!isScanningCooldown) {
+            lastDetectedCode = null;
+            readerDiv.classList.add('border-gray-300');
+            readerDiv.classList.remove('border-green-500');
+            captureBtn.disabled = true;
+        }
+    }
+
+    function captureCode() {
+        if (lastDetectedCode) {
+            barcodeInput.value = lastDetectedCode;
+            stopScanning();
+            const changeEvent = new Event('change');
+            barcodeInput.dispatchEvent(changeEvent);
+        }
+    }
+    
+    function stopScanning() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => console.error("Falha ao parar o leitor.", err));
+        }
+        isScanningCooldown = false;
+        onScanFailure();
+        readerContainer.style.display = 'none';
+        startScanBtn.style.display = 'block';
+    }
+
+    async function saveCountData() {
+        if (!selectedSessionId) {
+            showMessage('error', 'Nenhuma sessão de inventário foi selecionada.');
+            return;
+        }
+        
+        const countsToSend = [];
+        document.querySelectorAll('[data-location-item]').forEach(item => {
+            const countedQtyInput = item.querySelector('.counted-qty-input');
+            const countedQty = countedQtyInput.value;
+            if (countedQty !== null && countedQty.trim() !== '') {
+                countsToSend.push({
+                    codigo_item: currentItemCode,
+                    filial: item.dataset.filial,
+                    local: item.dataset.local,
+                    quantidade_contada: parseFloat(countedQty),
+                    saldo_sistema: parseFloat(item.dataset.saldo)
+                });
+            }
+        });
+
+        if (countsToSend.length === 0) {
+            showMessage('info', 'Nenhuma quantidade foi preenchida.');
+            return;
+        }
+        
+        const payload = {
+            sessao_id: selectedSessionId,
+            counts: countsToSend
+        };
+
+        try {
+            const response = await fetch('/api/save_count', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (response.ok) {
+                showMessage('success', data.success);
+                resetState();
+                barcodeInput.value = '';
+                barcodeInput.focus();
+            } else {
+                 showMessage('error', data.error);
+            }
+        } catch (error) {
+            showMessage('error', 'Erro de conexão ao salvar.');
+        }
+    }
+
+    async function fetchItemData(barcode) {
+        if (!barcode) return;
+        resetState();
+        loader.classList.remove('hidden');
+        currentItemCode = barcode;
+        try {
+            const response = await fetch(`/api/get_item_details?barcode=${barcode}`);
+            const data = await response.json();
+            if (response.ok) {
+                displayItemDetails(data);
+            } else {
+                showMessage('error', data.error);
+            }
+        } catch (error) {
+            showMessage('error', 'Erro de conexão ao buscar item.');
+        } finally {
+            loader.classList.add('hidden');
+        }
+    }
+    
+    function resetState() {
+        itemDetailsDiv.classList.add('hidden');
+        locationsTableBody.innerHTML = '';
+        locationsCardContainer.innerHTML = '';
+        itemCodeSpan.textContent = '';
+        itemDescriptionP.textContent = '';
+        itemUmStrong.textContent = '';
+        currentItemCode = '';
+    }
+
+    function showMessage(type, text) {
+        messageArea.innerHTML = ''; 
+        const colors = { 
+            error: 'bg-red-100 border-red-500 text-red-700', 
+            success: 'bg-green-100 border-green-500 text-green-700', 
+            info: 'bg-blue-100 border-blue-500 text-blue-700' 
+        };
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `p-4 rounded-md shadow-lg ${colors[type]}`;
+        messageDiv.setAttribute('role', 'alert');
+        messageDiv.textContent = text;
+        
+        messageArea.appendChild(messageDiv);
+
+        setTimeout(() => { 
+            messageDiv.remove();
+        }, 5000);
+    }
+    
+    function checkForUrlItemCode() {
+        const itemCodeFromUrl = urlParams.get('item_code');
+        if (itemCodeFromUrl && selectedSessionId) {
+            barcodeInput.value = itemCodeFromUrl;
+            const changeEvent = new Event('change');
+            barcodeInput.dispatchEvent(changeEvent);
+        }
+    }
+    
+    // --- NOVO CÓDIGO AQUI ---
+    function setInitialValues() {
+        const sessaoIdFromUrl = urlParams.get('sessao_id');
+        const itemCodeFromUrl = urlParams.get('item_code');
+
+        if (sessaoIdFromUrl) {
+            sessionSelect.value = sessaoIdFromUrl;
+        }
+        if (itemCodeFromUrl) {
+            barcodeInput.value = itemCodeFromUrl;
+        }
+        
+        if (sessaoIdFromUrl && itemCodeFromUrl) {
+            // Se ambos existirem, o evento de 'change' no select
+            // não foi disparado, então disparamos manualmente para
+            // carregar os dados e ativar a área de contagem
+            const changeEvent = new Event('change');
+            sessionSelect.dispatchEvent(changeEvent);
+        }
+    }
+
+    setInitialValues();
+    // --- FIM DO NOVO CÓDIGO ---
+});
+</script>
+{% endblock %}

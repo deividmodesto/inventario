@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar Inventário #{{ inventario.id }}{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-4">
+            {% for category, message in messages %}
+                <div class="p-4 rounded-md 
+                    {% if category == 'success' %}bg-green-100 border-green-400 text-green-700
+                    {% elif category == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700
+                    {% else %}bg-red-100 border-red-400 text-red-700{% endif %}" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold">Detalhes do Inventário #{{ inventario.id }}</h1>
+            <p class="text-gray-600">{{ inventario.descricao }}</p>
+        </div>
+        <div>
+            {% if inventario.status == 'Aberto' %}
+            <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                Aberto
+            </span>
+            {% else %}
+            <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                Fechado
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="hidden md:block overflow-x-auto border rounded-lg">
+        <table class="min-w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item / Descrição</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filial/Local</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contagem</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo Sistema</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qtd. Contada</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qtd. Final</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diferença</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white">
+                {% for grupo in contagens_agrupadas %}
+                    {% set contagem_principal = grupo[0] %}
+                    {% set ultima_contagem = grupo[-1] %}
+                    
+                    {% set is_consolidated = contagem_principal.codigo_item in itens_consolidados %}
+                    
+                    {% for contagem in grupo %}
+                    <tr class="
+                        {% if not loop.first %}bg-gray-50{% endif %}
+                        {% if not loop.last %}border-b border-dashed border-gray-200{% endif %}
+                        {% if is_consolidated %}bg-yellow-50 hover:bg-yellow-100{% endif %}
+                    ">
+                        {% if loop.first %}
+                            <td class="px-4 py-4 text-sm font-medium text-gray-900 align-top" rowspan="{{ grupo|length }}">
+                                <a href="{{ url_for('item_history', item_code=contagem.codigo_item) }}" class="text-blue-600 hover:underline">{{ contagem.codigo_item }}</a>
+                                <p class="text-xs text-gray-500 font-normal">{{ contagem.B1_DESC.strip() }}</p>
+                            </td>
+                            <td class="px-4 py-4 text-sm text-gray-500 align-top" rowspan="{{ grupo|length }}">{{ contagem.filial }}/{{ contagem.local }}</td>
+                        {% endif %}
+
+                        <td class="px-4 py-4 text-sm text-gray-700"><b>{{ contagem.numero_contagem }}ª</b></td>
+                        <td class="px-4 py-4 text-sm text-gray-500 font-mono">{{ "%.2f"|format(contagem.saldo_sistema) }}</td>
+                        <td class="px-4 py-4 text-sm font-mono">{{ "%.2f"|format(contagem.quantidade_contada) }}</td>
+                        
+                        {% if loop.first %}
+                            <td class="px-4 py-4 text-sm font-mono font-bold align-top" rowspan="{{ grupo|length }}">{{ "%.2f"|format(ultima_contagem.quantidade_final) }}</td>
+                            <td class="px-4 py-4 text-sm font-bold font-mono align-top 
+                                {% if ultima_contagem.diferenca > 0 %}text-green-600
+                                {% elif ultima_contagem.diferenca < 0 %}text-red-600{% endif %}" rowspan="{{ grupo|length }}">
+                                {{ "+%.2f"|format(ultima_contagem.diferenca) if ultima_contagem.diferenca > 0 else "%.2f"|format(ultima_contagem.diferenca) }}
+                            </td>
+                        {% endif %}
+
+                        <td class="px-4 py-4 text-sm text-gray-500">{{ contagem.username }}</td>
+
+                        {% if loop.first %}
+                            <td class="px-4 py-4 text-sm text-gray-500 align-top" rowspan="{{ grupo|length }}">
+                                {% if inventario.status == 'Aberto' %}
+                                    {% if ultima_contagem.status_contagem == 'Pendente' %}
+                                        <span class="text-yellow-600 font-semibold">Pendente</span>
+                                    {% elif ultima_contagem.numero_contagem >= 3 %}
+                                        <span class="text-gray-500">Limite Atingido</span>
+                                    {% elif ultima_contagem.diferenca != 0 %}
+                                        <form action="{{ url_for('solicitar_recontagem', contagem_id=ultima_contagem.id) }}" method="POST">
+                                            <button type="submit" class="text-orange-600 hover:text-orange-900 font-semibold">Solicitar {{ (grupo|length) + 1 }}ª Contagem</button>
+                                        </form>
+                                    {% else %}
+                                        <span class="text-green-600 font-semibold">OK</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                    <tr class="bg-gray-200 h-1"><td colspan="9"></td></tr>
+                {% else %}
+                    <tr><td colspan="9" class="text-center py-8 text-gray-500">Nenhuma contagem registrada para este inventário.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

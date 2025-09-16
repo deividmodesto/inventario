@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Etiquetas de Produto</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        body {
+            font-family: sans-serif;
+            font-size: 10pt;
+        }
+        .etiqueta {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 5px;
+            width: 45%; 
+            /* Altura mínima para permitir que a etiqueta cresça se a descrição for longa */
+            min-height: 100px; 
+            float: left;
+            box-sizing: border-box;
+            overflow: hidden; /* Mantém o conteúdo dentro da borda */
+            
+            /* Lógica de centralização */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .clear {
+            clear: both;
+        }
+
+        /* ===== ESTILO DA IMAGEM ATUALIZADO ===== */
+        .etiqueta img {
+            max-width: 90%;
+            max-height: 50px;
+            object-fit: contain;
+            margin-bottom: 5px;
+            /* Regras para garantir a centralização da imagem */
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* ===== ESTILO DO CÓDIGO E DESCRIÇÃO ATUALIZADOS ===== */
+        .item-code {
+            font-weight: bold;
+            font-size: 11pt;
+            margin-top: 5px;
+        }
+        .item-desc {
+            font-size: 8pt;
+            margin-top: 3px;
+            width: 95%; /* Força a quebra de linha */
+            overflow-wrap: break-word; /* Quebra palavras muito longas */
+        }
+        /* ==================================================== */
+    </style>
+</head>
+<body>
+    {% for etiqueta in etiquetas %}
+        <div class="etiqueta">
+            <img src="{{ etiqueta.image_url }}" alt="Código do Produto">
+            <div class="item-code">{{ etiqueta.item.B1_COD.strip() }}</div>
+            <div class="item-desc">{{ etiqueta.item.B1_DESC.strip() }}</div>
+        </div>
+    {% endfor %}
+</body>
+</html>

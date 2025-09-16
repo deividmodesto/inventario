@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Recontagem{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+    <h1 class="text-2xl font-bold mb-6">Itens Pendentes de Recontagem</h1>
+    <p class="text-gray-600 mb-8">Esta é a lista de trabalho com todos os itens que foram marcados para uma segunda contagem. Utilize a página de "Contagem" para inserir os novos valores.</p>
+
+    <div class="hidden md:block overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inventário</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Filial</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Local</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ação</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for item in itens %}
+                <tr>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ item.inventario_desc }}</td>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ item.codigo_item.strip() }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ item.B1_DESC.strip() }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ item.filial }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ item.local }}</td>
+                    <td class="px-6 py-4 text-sm font-medium">
+                        {% if item.is_consolidated %}
+                            <a href="{{ url_for('contagem_consolidada_page', sessao_id=item.sessao_id, item_code=item.codigo_item.strip(), group_name=item.group_name) }}" target="_blank" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-md text-xs">
+                                Recontar (Consolidado)
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('dashboard', sessao_id=item.sessao_id, item_code=item.codigo_item.strip(), from_planner=1) }}" target="_blank" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-md text-xs">
+                                Recontar (Detalhado)
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-4 text-center text-gray-500">Nenhum item pendente de recontagem.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="md:hidden space-y-4">
+        {% for item in itens %}
+        <div class="bg-gray-50 p-4 rounded-lg border">
+            <p class="text-xs text-gray-500 mb-2">{{ item.inventario_desc }}</p>
+            <div class="mb-3">
+                <p class="font-bold text-gray-800">{{ item.codigo_item.strip() }}</p>
+                <p class="text-sm text-gray-600">{{ item.B1_DESC.strip() }}</p>
+            </div>
+            <div class="flex justify-between items-center border-t pt-3">
+                <p class="text-xs text-gray-500">
+                    <span class="font-medium">{{ item.filial }} / {{ item.local }}</span>
+                </p>
+                {% if item.is_consolidated %}
+                    <a href="{{ url_for('contagem_consolidada_page', sessao_id=item.sessao_id, item_code=item.codigo_item.strip(), group_name=item.group_name) }}" target="_blank" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-md text-xs">
+                        Recontar (Consolidado)
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('dashboard', sessao_id=item.sessao_id, item_code=item.codigo_item.strip(), from_planner=1) }}" target="_blank" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-md text-xs">
+                        Recontar (Detalhado)
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-500">
+            <p>Nenhum item pendente de recontagem.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
