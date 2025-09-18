@@ -1615,15 +1615,19 @@ def gerar_etiquetas():
     cursor.execute("SELECT DISTINCT B2_LOCAL FROM SB2010 WHERE D_E_L_E_T_ <> '*' ORDER BY B2_LOCAL")
     locais = [row.B2_LOCAL.strip() for row in cursor.fetchall()]
     
-    if request.args: 
+    if request.args:
+        # --- ALTERAÇÃO PRINCIPAL AQUI ---
+        # A busca agora foca na SB1010 e junta a SB2010 apenas para filtros,
+        # usando LEFT JOIN para não excluir produtos sem saldo/movimentação.
         query_parts = [
             "SELECT DISTINCT b1.B1_COD, b1.B1_DESC",
             "FROM SB1010 b1",
-            "JOIN SB2010 b2 ON b1.B1_COD = b2.B2_COD",
-            "WHERE b1.D_E_L_E_T_ <> '*' AND b2.D_E_L_E_T_ <> '*'"
+            "LEFT JOIN SB2010 b2 ON b1.B1_COD = b2.B2_COD AND b2.D_E_L_E_T_ <> '*'", # LEFT JOIN aqui
+            "WHERE b1.D_E_L_E_T_ <> '*'" # Condição principal na SB1010
         ]
         params = []
         
+        # O resto da lógica de filtros permanece a mesma
         if search_term:
             query_parts.append("AND (b1.B1_COD LIKE ? OR b1.B1_DESC LIKE ?)")
             like_term = f'%{search_term}%'
@@ -1636,11 +1640,13 @@ def gerar_etiquetas():
             
         if filiais_selecionadas:
             placeholders = ','.join(['?'] * len(filiais_selecionadas))
+            # O filtro de filial agora precisa verificar se b2 existe
             query_parts.append(f"AND b2.B2_FILIAL IN ({placeholders})")
             params.extend(filiais_selecionadas)
         
         if locais_selecionados:
             placeholders = ','.join(['?'] * len(locais_selecionados))
+            # O filtro de local também precisa verificar se b2 existe
             query_parts.append(f"AND b2.B2_LOCAL IN ({placeholders})")
             params.extend(locais_selecionados)
             
