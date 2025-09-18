@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from weasyprint import HTML, CSS
 import requests 
 import json
+import traceback
 
 # Importações para QRCode, E-mail e EXCEL
 import qrcode
@@ -787,70 +788,30 @@ def excluir_inventario(sessao_id):
         conn.close()
     return redirect(url_for('gerenciar_inventarios'))
 
-
+# ======================================================================================
+# ========= FUNÇÃO CORRIGIDA - INÍCIO =================================================
+# ======================================================================================
 @app.route('/inventario/<int:sessao_id>')
 @login_required
 @role_required('Admin', 'Supervisor', 'Operador', 'Inventarista')
 def visualizar_inventario(sessao_id):
-    # CORREÇÃO: Utiliza a função de análise para obter os dados processados
+    """
+    CORREÇÃO: Esta função agora simplesmente chama a função de análise de dados
+    e passa os resultados diretamente para o template, sem lógicas duplicadas.
+    """
     dados = _gerar_dados_analiticos(sessao_id)
+
     if not dados:
         flash("Inventário não encontrado ou não possui contagens.", "error")
         return redirect(url_for('gerenciar_inventarios'))
-    conn = get_db_connection(DB_INVENTARIO)
-    cursor = conn.cursor()
 
-    cursor.execute("SELECT id, descricao, status FROM inventario_sessoes WHERE id = ? AND D_E_L_E_T_ <> '*'", sessao_id)
-    inventario = cursor.fetchone()
-
-    if not inventario:
-        flash("Inventário não encontrado.", "error")
-        return redirect(url_for('gerenciar_inventarios'))
-
-    query = f"""
-    SELECT 
-        c.*, 
-        (c.quantidade_contada - c.saldo_sistema) as diferenca,
-        ISNULL(b1.B1_DESC, 'N/A') as B1_DESC,
-        u.username
-    FROM contagens c
-    JOIN usuarios u ON c.usuario_id = u.id
-    LEFT JOIN {DB_BI}.dbo.SB1010 b1 ON c.codigo_item COLLATE DATABASE_DEFAULT = b1.B1_COD COLLATE DATABASE_DEFAULT AND b1.D_E_L_E_T_ <> '*'
-    WHERE c.sessao_id = ?
-    ORDER BY ISNULL(c.contagem_pai_id, c.id), c.numero_contagem
-    """
-    cursor.execute(query, sessao_id)
-    todas_as_contagens = cursor.fetchall()
-    conn.close()
-
-    item_locais = {}
-    for c in todas_as_contagens:
-        chave = (c.contagem_pai_id or c.id, c.codigo_item)
-        if chave not in item_locais:
-            item_locais[chave] = set()
-        item_locais[chave].add(c.filial)
-
-    itens_consolidados = set()
-    for chave, filiais_contadas in item_locais.items():
-        id_grupo, codigo_item = chave
-        for nome_grupo, filiais_do_grupo in ALMOXARIFADOS_GRUPO.items():
-            filiais_encontradas_no_grupo = filiais_contadas.intersection(filiais_do_grupo)
-            if len(filiais_encontradas_no_grupo) > 1:
-                itens_consolidados.add(id_grupo)
-                break 
-
-    contagens_agrupadas = {}
-    for c in todas_as_contagens:
-        pai_id = c.contagem_pai_id or c.id
-        if pai_id not in contagens_agrupadas:
-            contagens_agrupadas[pai_id] = []
-        contagens_agrupadas[pai_id].append(c)
-
-    return render_template('visualizar_inventario.html', 
-                           inventario=dados['inventario'], 
-                           contagens_agrupadas=dados['contagens_agrupadas'], 
-                           itens_consolidados=dados['itens_consolidados'],
+    return render_template('visualizar_inventario.html',
+                           inventario=dados['inventario'],
+                           contagens_agrupadas=dados['contagens_agrupadas'],
                            username=session.get('username'))
+# ======================================================================================
+# ========= FUNÇÃO CORRIGIDA - FIM ===================================================
+# ======================================================================================
 
 @app.route('/inventarios/exportar_csv/<int:sessao_id>')
 @login_required
@@ -946,14 +907,15 @@ def exportar_excel(sessao_id):
     headers = ['Código', 'Descrição', 'Filial', 'Local', 'Custo Unit.', 'Saldo Sistema (Qtd)', 'Qtd. Contada', 'Diferença (Qtd)', 'Valor Diferença', 'Usuário', 'Num. Contagem']
     ws_detalhes.append(headers)
     
-    for grupo_contagens in dados['contagens_agrupadas']:
-        for contagem in grupo_contagens:
-            valor_diferenca = contagem['diferenca'] * contagem['custo_unitario']
-            ws_detalhes.append([
-                contagem['codigo_item'], contagem['B1_DESC'], contagem['filial'], contagem['local'],
-                contagem['custo_unitario'], contagem['saldo_sistema'], contagem['quantidade_contada'],
-                contagem['diferenca'], valor_diferenca, contagem['username'], contagem['numero_contagem']
-            ])
+    for item_processed in dados['contagens_agrupadas']:
+        for location_group in item_processed['locations']:
+            for contagem in location_group:
+                valor_diferenca = contagem['diferenca'] * contagem['custo_unitario']
+                ws_detalhes.append([
+                    contagem['codigo_item'], contagem['B1_DESC'], contagem['filial'], contagem['local'],
+                    contagem['custo_unitario'], contagem['saldo_sistema'], contagem['quantidade_contada'],
+                    contagem['diferenca'], valor_diferenca, contagem['username'], contagem['numero_contagem']
+                ])
 
     output = BytesIO()
     wb.save(output)
@@ -1048,11 +1010,12 @@ def contagem_planejada():
                            data_final_pesquisada=data_final_form,
                            username=session.get('username'))
 
+# ======================================================================================
+# ========= FUNÇÃO DE ANÁLISE REFEITA - INÍCIO ========================================
+# ======================================================================================
 def _gerar_dados_analiticos(sessao_id):
-    """Função auxiliar para buscar e processar todos os dados para os dashboards e relatórios."""
     conn = get_db_connection(DB_INVENTARIO)
     cursor = conn.cursor()
-
     inventario = cursor.execute("SELECT id, descricao, data_abertura, data_fechamento, status FROM inventario_sessoes WHERE id = ?", sessao_id).fetchone()
     if not inventario:
         conn.close()
@@ -1060,110 +1023,97 @@ def _gerar_dados_analiticos(sessao_id):
 
     query_contagens = "SELECT * FROM contagens WHERE sessao_id = ?"
     contagens_da_sessao = cursor.execute(query_contagens, sessao_id).fetchall()
-
+    
     if not contagens_da_sessao:
         conn.close()
-        metricas_vazias = {'TotalContagens': 0, 'TotalDiferencas': 0, 'TotalSobra': 0, 'TotalFalta': 0, 'ValorTotalSistema': 0, 'ValorSobra': 0, 'ValorFalta': 0, 'Acuracia': 100, 'ValorApurado': 0}
-        divergencia_vazia = {nome: {'sobra': 0, 'falta': 0} for nome in ALMOXARIFADOS_GRUPO.keys()}
-        return { "inventario": inventario, "metricas": metricas_vazias, "chart_labels": [], "chart_data": [], "contagens_agrupadas": [], "top_faltas": [], "top_sobras": [], "divergencia_por_grupo": divergencia_vazia, "itens_consolidados": set() }
+        return {
+            "inventario": inventario, "contagens_agrupadas": [],
+            "metricas": {}, "chart_labels": [], "chart_data": [], "top_faltas": [], "top_sobras": [], "divergencia_por_grupo": {}
+        }
 
-    codigos_itens = list(set(c.codigo_item for c in contagens_da_sessao))
+    user_ids = list(set(c.usuario_id for c in contagens_da_sessao))
+    users = {}
+    if user_ids:
+        placeholders = ','.join(['?'] * len(user_ids))
+        cursor.execute(f"SELECT id, username FROM usuarios WHERE id IN ({placeholders})", *user_ids)
+        for row in cursor.fetchall():
+            users[row.id] = row.username
+    conn.close()
+
+    contagens_agrupadas_por_item = {}
+    for c in contagens_da_sessao:
+        c_dict = dict(zip([column[0] for column in c.cursor_description], c))
+        c_dict['username'] = users.get(c_dict['usuario_id'], 'N/A')
+        c_dict['diferenca'] = c_dict['quantidade_contada'] - c_dict['saldo_sistema']
+        codigo_item = c_dict['codigo_item']
+        if codigo_item not in contagens_agrupadas_por_item:
+            contagens_agrupadas_por_item[codigo_item] = []
+        contagens_agrupadas_por_item[codigo_item].append(c_dict)
+
+    codigos_itens = list(contagens_agrupadas_por_item.keys())
     placeholders = ','.join(['?'] * len(codigos_itens))
-    query_dados_itens = f"SELECT B1_COD, B1_DESC, B2_FILIAL, B2_CMFIM1 FROM {DB_BI}.dbo.SB1010 b1 LEFT JOIN {DB_BI}.dbo.SB2010 b2 ON b1.B1_COD = b2.B2_COD AND b2.D_E_L_E_T_ <> '*' WHERE b1.B1_COD IN ({placeholders}) AND b1.D_E_L_E_T_ <> '*'"
+    query_dados_itens = f"SELECT B1_COD, B1_DESC FROM {DB_BI}.dbo.SB1010 WHERE B1_COD IN ({placeholders}) AND D_E_L_E_T_ <> '*'"
     conn_bi = get_db_connection(DB_BI)
     cursor_bi = conn_bi.cursor()
     cursor_bi.execute(query_dados_itens, *codigos_itens)
     dados_itens_raw = cursor_bi.fetchall()
     conn_bi.close()
-
     descricoes = {row.B1_COD.strip(): row.B1_DESC.strip() for row in dados_itens_raw}
-    custos = {(row.B1_COD.strip(), row.B2_FILIAL.strip()): float(row.B2_CMFIM1 or 0) for row in dados_itens_raw if row.B2_FILIAL}
 
-    todas_as_contagens = []
-    for c in contagens_da_sessao:
-        contagem_dict = dict(zip([column[0] for column in c.cursor_description], c))
-        codigo = contagem_dict['codigo_item']
-        filial = contagem_dict['filial']
-        contagem_dict['B1_DESC'] = descricoes.get(codigo, 'N/A')
-        contagem_dict['custo_unitario'] = custos.get((codigo, filial), 0.0)
-        contagem_dict['saldo_sistema'] = float(contagem_dict['saldo_sistema'])
-        contagem_dict['quantidade_contada'] = float(contagem_dict['quantidade_contada'])
-        contagem_dict['diferenca'] = contagem_dict['quantidade_contada'] - contagem_dict['saldo_sistema']
-        user_info = cursor.execute("SELECT username FROM usuarios WHERE id = ?", contagem_dict['usuario_id']).fetchone()
-        contagem_dict['username'] = user_info.username if user_info else 'N/A'
-        todas_as_contagens.append(contagem_dict)
+    contagens_processadas = []
+    for item_code, contagens_do_item in contagens_agrupadas_por_item.items():
+        for c in contagens_do_item:
+            c['B1_DESC'] = descricoes.get(item_code, 'N/A')
 
-    # --- LÓGICA DE AGRUPAMENTO POR ITEM ---
-    contagens_agrupadas_por_item = {}
-    for c in todas_as_contagens:
-        codigo_item = c['codigo_item']
-        if codigo_item not in contagens_agrupadas_por_item:
-            contagens_agrupadas_por_item[codigo_item] = []
-        contagens_agrupadas_por_item[codigo_item].append(c)
-    
-    final_groups = {}
-    for codigo_item, contagens in contagens_agrupadas_por_item.items():
-        sub_groups = {}
-        for c in contagens:
+        locais_do_item = {}
+        for c in contagens_do_item:
             chave_local = (c['filial'], c['local'])
-            if chave_local not in sub_groups:
-                sub_groups[chave_local] = []
-            sub_groups[chave_local].append(c)
-        for sg in sub_groups.values():
-            sg.sort(key=lambda x: x['numero_contagem'])
-        final_groups[codigo_item] = list(sub_groups.values())
+            if chave_local not in locais_do_item:
+                locais_do_item[chave_local] = []
+            locais_do_item[chave_local].append(c)
 
-    # --- LÓGICA DE CÁLCULO ---
-    valor_total_sistema = 0
-    valor_sobra = 0
-    valor_falta = 0
-    diferencas_finais_por_item = {}
-    grupo_por_filial = {filial: nome for nome, filiais in ALMOXARIFADOS_GRUPO.items() for filial in filiais}
-    divergencia_por_grupo = {nome: {'sobra': 0, 'falta': 0} for nome in ALMOXARIFADOS_GRUPO.keys()}
+        max_n_contagem_geral = max(c['numero_contagem'] for c in contagens_do_item)
+        
+        ainda_pendente_geral = any(
+            c['status_contagem'] == 'Pendente' 
+            for c in contagens_do_item 
+            if c['numero_contagem'] == max_n_contagem_geral
+        )
+        
+        divergencia_geral_encontrada = False
+        if not ainda_pendente_geral:
+            divergencia_geral_encontrada = any(
+                c['diferenca'] != 0 
+                for c in contagens_do_item 
+                if c['numero_contagem'] == max_n_contagem_geral
+            )
 
-    for item_group in final_groups.values():
-        for location_group in item_group:
-            ultima_contagem = location_group[-1]
-            custo = ultima_contagem['custo_unitario']
-            diferenca_final = ultima_contagem['diferenca']
-            
-            if len(location_group) == 3:
-                resultados = [c['quantidade_contada'] for c in location_group]
-                counts = {num: resultados.count(num) for num in set(resultados)}
-                contagem_final_validada = max(counts, key=counts.get) if max(counts.values()) > 1 else resultados[-1]
-                diferenca_final = contagem_final_validada - ultima_contagem['saldo_sistema']
+        necessita_recontagem = divergencia_geral_encontrada and max_n_contagem_geral < 3
+        limite_atingido = divergencia_geral_encontrada and max_n_contagem_geral >= 3
+        tudo_ok = not divergencia_geral_encontrada and not ainda_pendente_geral
 
-            diferenca_valor = diferenca_final * custo
-            valor_total_sistema += ultima_contagem['saldo_sistema'] * custo
-            if diferenca_valor > 0: valor_sobra += diferenca_valor
-            elif diferenca_valor < 0: valor_falta += abs(diferenca_valor)
-            
-            nome_grupo_item = grupo_por_filial.get(ultima_contagem['filial'])
-            if nome_grupo_item:
-                if diferenca_valor > 0: divergencia_por_grupo[nome_grupo_item]['sobra'] += diferenca_valor
-                elif diferenca_valor < 0: divergencia_por_grupo[nome_grupo_item]['falta'] += abs(diferenca_valor)
+        for loc_group in locais_do_item.values():
+            loc_group.sort(key=lambda x: x['numero_contagem'])
 
-            chave_item = (ultima_contagem['codigo_item'], ultima_contagem['B1_DESC'])
-            diferencas_finais_por_item[chave_item] = diferencas_finais_por_item.get(chave_item, 0) + diferenca_valor
-    
-    itens_ordenados = sorted(diferencas_finais_por_item.items(), key=lambda item: item[1])
-    top_faltas = [{'codigo': k[0], 'descricao': k[1], 'valor': v} for k, v in itens_ordenados if v < 0][:5]
-    top_sobras = [{'codigo': k[0], 'descricao': k[1], 'valor': v} for k, v in reversed(itens_ordenados) if v > 0][:5]
-    valor_total_diferenca = valor_sobra + valor_falta
-    acuracia = 100 * (1 - (valor_total_diferenca / valor_total_sistema)) if valor_total_sistema > 0 else 100
-    valor_apurado = valor_total_sistema + valor_sobra - valor_falta
-    metricas = { 'TotalContagens': len(todas_as_contagens), 'TotalDiferencas': len([v for v in diferencas_finais_por_item.values() if v != 0]), 'TotalSobra': len([v for v in diferencas_finais_por_item.values() if v > 0]), 'TotalFalta': len([v for v in diferencas_finais_por_item.values() if v < 0]), 'ValorTotalSistema': valor_total_sistema, 'ValorSobra': valor_sobra, 'ValorFalta': valor_falta, 'Acuracia': acuracia, 'ValorApurado': valor_apurado }
-    dados_usuarios = cursor.execute("SELECT u.username, COUNT(c.id) as NumContagens FROM contagens c JOIN usuarios u ON c.usuario_id = u.id WHERE c.sessao_id = ? GROUP BY u.username ORDER BY NumContagens DESC", sessao_id).fetchall()
-    conn.close()
-    chart_labels = [row.username for row in dados_usuarios]
-    chart_data = [row.NumContagens for row in dados_usuarios]
+        contagens_processadas.append({
+            'item_info': contagens_do_item[0],
+            'locations': list(locais_do_item.values()),
+            'necessita_recontagem': necessita_recontagem,
+            'proximo_numero_contagem': max_n_contagem_geral + 1,
+            'id_para_recontagem': contagens_do_item[-1]['id'],
+            'limite_atingido': limite_atingido,
+            'tudo_ok': tudo_ok,
+            'pendente_geral': ainda_pendente_geral
+        })
 
     return {
-        "inventario": inventario, "metricas": metricas, "chart_labels": chart_labels, "chart_data": chart_data,
-        "contagens_agrupadas": final_groups.values(), "top_faltas": top_faltas, "top_sobras": top_sobras,
-        "divergencia_por_grupo": divergencia_por_grupo,
-        "itens_consolidados": set()
+        "inventario": inventario,
+        "contagens_agrupadas": contagens_processadas
     }
+# ======================================================================================
+# ========= FUNÇÃO DE ANÁLISE REFEITA - FIM ===========================================
+# ======================================================================================
+
 
 @app.route('/dashboard_analitico')
 @login_required
@@ -1181,6 +1131,9 @@ def selecionar_inventario_analitico():
 @role_required('Admin', 'Supervisor')
 def dashboard_analitico(sessao_id):
     dados = _gerar_dados_analiticos(sessao_id)
+    print("\n" + "="*50)
+    print(f"[DEBUG] Iniciando _gerar_dados_analiticos para Sessão ID: {sessao_id}")
+    print("="*50)
     if not dados:
         flash("Inventário não encontrado.", "error")
         return redirect(url_for('selecionar_inventario_analitico'))
@@ -1201,8 +1154,8 @@ def gerar_relatorio_pdf(sessao_id):
     # Lógica do Gráfico (sem alteração)
     plt.figure(figsize=(5, 5))
     metricas = dados['metricas']
-    total_corretos = (metricas['TotalContagens'] or 0) - (metricas['TotalDiferencas'] or 0)
-    data_pie = [total_corretos, metricas['TotalSobra'] or 0, metricas['TotalFalta'] or 0]
+    total_corretos = (metricas.get('TotalContagens', 0)) - (metricas.get('TotalDiferencas', 0))
+    data_pie = [total_corretos, metricas.get('TotalSobra', 0), metricas.get('TotalFalta', 0)]
     labels_pie = ['Corretos', 'Com Sobra', 'Com Falta']
     colors_pie = ['#05B540', '#FFAA00', '#FF6600']
     plt.pie(data_pie, labels=labels_pie, autopct='%1.1f%%', colors=colors_pie, startangle=90)
@@ -1247,8 +1200,8 @@ def enviar_relatorio_email(sessao_id):
     # Lógica do Gráfico (idêntica à da geração de PDF)
     plt.figure(figsize=(5, 5))
     metricas = dados['metricas']
-    total_corretos = (metricas['TotalContagens'] or 0) - (metricas['TotalDiferencas'] or 0)
-    data_pie = [total_corretos, metricas['TotalSobra'] or 0, metricas['TotalFalta'] or 0]
+    total_corretos = (metricas.get('TotalContagens', 0)) - (metricas.get('TotalDiferencas', 0))
+    data_pie = [total_corretos, metricas.get('TotalSobra', 0), metricas.get('TotalFalta', 0)]
     labels_pie = ['Corretos', 'Com Sobra', 'Com Falta']
     colors_pie = ['#05B540', '#FFAA00', '#FF6600']
     plt.pie(data_pie, labels=labels_pie, autopct='%1.1f%%', colors=colors_pie, startangle=90)
@@ -1363,10 +1316,10 @@ def lista_recontagem():
 def solicitar_recontagem(contagem_id):
     conn = get_db_connection(DB_INVENTARIO)
     cursor = conn.cursor()
-    sessao_id_redirect = None # Variável para garantir o redirecionamento
+    sessao_id_redirect = None
     try:
-        # 1. Pega os dados essenciais da contagem que disparou a ação
-        cursor.execute("SELECT sessao_id, codigo_item, numero_contagem FROM contagens WHERE id = ?", contagem_id)
+        # Pega a contagem base (específica)
+        cursor.execute("SELECT id, sessao_id, codigo_item, filial, local, numero_contagem FROM contagens WHERE id = ?", contagem_id)
         contagem_base = cursor.fetchone()
 
         if not contagem_base:
@@ -1374,56 +1327,61 @@ def solicitar_recontagem(contagem_id):
             return redirect(request.referrer or url_for('gerenciar_inventarios'))
 
         sessao_id = contagem_base.sessao_id
-        sessao_id_redirect = sessao_id # Armazena para o bloco finally
+        sessao_id_redirect = sessao_id
         codigo_item = contagem_base.codigo_item
+        filial = contagem_base.filial
+        local = contagem_base.local
         ultimo_num_contagem = contagem_base.numero_contagem
         novo_num_contagem = ultimo_num_contagem + 1
 
         if novo_num_contagem > 3:
-            flash('Limite de 3 contagens atingido para este item.', 'warning')
+            flash('Limite de 3 contagens atingido para este item neste local.', 'warning')
             return redirect(url_for('visualizar_inventario', sessao_id=sessao_id))
 
-        # 2. Encontra TODAS as contagens da última rodada para este item (todos os locais)
+        # Recupera a contagem "pai" (primeira contagem) para esse sessao_id + codigo_item + filial + local
         cursor.execute("""
-            SELECT id, filial, local, saldo_sistema, contagem_pai_id
-            FROM contagens
-            WHERE sessao_id = ? AND codigo_item = ? AND numero_contagem = ?
-        """, sessao_id, codigo_item, ultimo_num_contagem)
-        ultimas_contagens = cursor.fetchall()
+            SELECT id FROM contagens
+            WHERE sessao_id = ? AND codigo_item = ? AND filial = ? AND local = ? AND numero_contagem = 1
+        """, sessao_id, codigo_item, filial, local)
+        primeira = cursor.fetchone()
+        pai_id = primeira.id if primeira else None
 
-        if not ultimas_contagens:
-            flash('Não foram encontradas contagens da última rodada para este item.', 'error')
+        # Recupera a(s) última(s) contagens somente para este sessao_id, codigo_item, filial e local com numero_contagem = ultimo_num_contagem
+        cursor.execute("""
+            SELECT id, saldo_sistema
+            FROM contagens
+            WHERE sessao_id = ? AND codigo_item = ? AND filial = ? AND local = ? AND numero_contagem = ?
+        """, sessao_id, codigo_item, filial, local, ultimo_num_contagem)
+        ultimas_contagens_local = cursor.fetchall()
+
+        if not ultimas_contagens_local:
+            flash('Não foram encontradas contagens da última rodada para este item neste local.', 'error')
             return redirect(url_for('visualizar_inventario', sessao_id=sessao_id))
 
-        ids_para_atualizar = [c.id for c in ultimas_contagens]
-
-        # 3. Cria as novas tarefas pendentes, baseadas nas últimas contagens
-        for c_antiga in ultimas_contagens:
-            # Garante que o contagem_pai_id aponte para a primeira contagem original do seu local
-            pai_id_original = c_antiga.contagem_pai_id or c_antiga.id
+        # Inserir apenas UMA nova recontagem por cada registro encontrado para este local (normalmente será só 1)
+        for c_antiga in ultimas_contagens_local:
+            # contagem_pai_id deve ser a primeira contagem (se existir), senão aponta para a contagem atual antiga
+            pai_para_inserir = pai_id or c_antiga.id
             cursor.execute("""
                 INSERT INTO contagens (sessao_id, usuario_id, codigo_item, filial, local, saldo_sistema, quantidade_contada, status_contagem, contagem_pai_id, numero_contagem)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             sessao_id, session['user_id'], codigo_item,
-            c_antiga.filial, c_antiga.local, c_antiga.saldo_sistema,
-            0, 'Pendente', pai_id_original, novo_num_contagem)
+            filial, local, c_antiga.saldo_sistema,
+            0, 'Pendente', pai_para_inserir, novo_num_contagem)
 
-        # 4. Atualiza o status das contagens da rodada anterior para "Recontagem Solicitada"
-        if ids_para_atualizar:
-            placeholders = ','.join(['?'] * len(ids_para_atualizar))
-            cursor.execute(f"UPDATE contagens SET status_contagem = 'Recontagem Solicitada' WHERE id IN ({placeholders})", *ids_para_atualizar)
+            # Atualiza o status da contagem antiga (apenas dessa local) para 'Recontagem Solicitada'
+            cursor.execute("UPDATE contagens SET status_contagem = 'Recontagem Solicitada' WHERE id = ?", c_antiga.id)
 
         conn.commit()
-        flash('Recontagem solicitada com sucesso.', 'success')
+        flash('Recontagem solicitada com sucesso para o local selecionado.', 'success')
     except Exception as e:
         conn.rollback()
+        traceback.print_exc()
         flash(f'Erro ao solicitar recontagem: {e}', 'error')
     finally:
         if conn:
             conn.close()
-            
-    # Redireciona de volta para a tela do inventário
     return redirect(url_for('visualizar_inventario', sessao_id=sessao_id_redirect))
 
 @app.route('/item_history/<item_code>')
@@ -1839,9 +1797,6 @@ def save_count():
     conn = get_db_connection(DB_INVENTARIO)
     cursor = conn.cursor()
     
-    # Armazena os itens que já tiveram suas contagens antigas finalizadas
-    itens_ja_finalizados = set()
-
     try:
         for count in counts_data:
             codigo_item = count.get('codigo_item')
@@ -1849,34 +1804,20 @@ def save_count():
             local = count.get('local')
             quantidade_contada = count.get('quantidade_contada')
 
-            # Procura por uma recontagem pendente para este item e local específico
             cursor.execute("""
-                SELECT id, numero_contagem FROM contagens 
+                SELECT id FROM contagens 
                 WHERE sessao_id = ? AND codigo_item = ? AND filial = ? AND local = ? 
                 AND status_contagem = 'Pendente'
             """, sessao_id, codigo_item, filial, local)
             contagem_pendente = cursor.fetchone()
 
             if contagem_pendente:
-                # Se encontrou, ATUALIZA a recontagem pendente para 'OK'
                 cursor.execute("""
                     UPDATE contagens 
                     SET quantidade_contada = ?, usuario_id = ?, data_contagem = GETDATE(), status_contagem = 'OK'
                     WHERE id = ?
                 """, quantidade_contada, user_id, contagem_pendente.id)
-
-                # Se for uma recontagem e ainda não finalizamos as contagens antigas para este item
-                if contagem_pendente.numero_contagem > 1 and codigo_item not in itens_ja_finalizados:
-                    numero_contagem_anterior = contagem_pendente.numero_contagem - 1
-                    # ATUALIZA O STATUS DE TODAS as contagens da rodada anterior para este item
-                    cursor.execute("""
-                        UPDATE contagens SET status_contagem = 'Finalizado'
-                        WHERE sessao_id = ? AND codigo_item = ? AND numero_contagem = ? AND status_contagem = 'Recontagem Solicitada'
-                    """, sessao_id, codigo_item, numero_contagem_anterior)
-                    # Adiciona o item ao conjunto para não repetir a operação
-                    itens_ja_finalizados.add(codigo_item)
             else:
-                # Se não houver pendência para este local, é uma primeira contagem.
                 if quantidade_contada is not None:
                     cursor.execute(
                         """
@@ -2091,111 +2032,82 @@ def save_consolidated_count():
         if not filiais_do_grupo:
             return jsonify({'error': f'Grupo de almoxarifado "{group_name}" não encontrado.'}), 404
 
-        conn_bi = get_db_connection(DB_BI)
-        if not conn_bi:
-            return jsonify({'error': 'Falha ao conectar ao banco de dados BI.'}), 500
-        cursor_bi = conn_bi.cursor()
+        conn_inv = get_db_connection(DB_INVENTARIO)
+        cursor_inv = conn_inv.cursor()
 
-        saldos_locais = []
-        for filial in filiais_do_grupo:
-            cursor_bi.execute(
-                "SELECT B2_LOCAL, B2_QATU FROM SB2010 WHERE B2_COD = ? AND B2_FILIAL = ? AND D_E_L_E_T_ <> '*' ORDER BY B2_LOCAL",
-                item_code, filial
-            )
-            rows = cursor_bi.fetchall()
-            for row in rows:
-                saldos_locais.append({
-                    'filial': filial,
-                    'local': row.B2_LOCAL.strip(),
-                    'saldo': float(row.B2_QATU) if row.B2_QATU else 0.0
-                })
-        
-        if not saldos_locais:
-            conn_inventario = get_db_connection(DB_INVENTARIO)
-            cursor_inventario = conn_inventario.cursor()
-            query_contagem_original = """
-                SELECT DISTINCT filial, local FROM contagens
-                WHERE codigo_item = ? 
-            """
-            cursor_inventario.execute(query_contagem_original, item_code)
-            contagens_anteriores = cursor_inventario.fetchall()
-            conn_inventario.close()
+        placeholders = ','.join(['?'] * len(filiais_do_grupo))
+        cursor_inv.execute(f"""
+            SELECT id, filial, local, saldo_sistema FROM contagens 
+            WHERE sessao_id = ? AND codigo_item = ? AND status_contagem = 'Pendente' AND filial IN ({placeholders})
+        """, sessao_id, item_code, *filiais_do_grupo)
+        contagens_pendentes = cursor_inv.fetchall()
+
+        if contagens_pendentes:
+            saldos_locais = [{'filial': c.filial, 'local': c.local, 'saldo': float(c.saldo_sistema)} for c in contagens_pendentes]
+        else:
+            conn_bi = get_db_connection(DB_BI)
+            cursor_bi = conn_bi.cursor()
+            saldos_locais = []
+            for filial in filiais_do_grupo:
+                cursor_bi.execute(
+                    "SELECT B2_LOCAL, B2_QATU FROM SB2010 WHERE B2_COD = ? AND B2_FILIAL = ? AND D_E_L_E_T_ <> '*' ORDER BY B2_LOCAL",
+                    item_code, filial
+                )
+                for row in cursor_bi.fetchall():
+                    saldos_locais.append({'filial': filial, 'local': row.B2_LOCAL.strip(), 'saldo': float(row.B2_QATU or 0.0)})
+            conn_bi.close()
             
-            for row in contagens_anteriores:
-                filial = row.filial.strip()
-                local = row.local.strip()
-                if filial in filiais_do_grupo:
-                    saldos_locais.append({'filial': filial, 'local': local, 'saldo': 0.0})
+            if not saldos_locais:
+                cursor_inv.execute(f"SELECT DISTINCT filial, local FROM contagens WHERE codigo_item = ? AND filial IN ({placeholders})", item_code, *filiais_do_grupo)
+                for row in cursor_inv.fetchall():
+                    saldos_locais.append({'filial': row.filial.strip(), 'local': row.local.strip(), 'saldo': 0.0})
 
         total_saldo_sistema = sum(item['saldo'] for item in saldos_locais)
         alocacoes_finais = { (item['filial'], item['local']): 0.0 for item in saldos_locais }
 
         if total_quantity >= total_saldo_sistema:
-            # --- LÓGICA DE SOBRA OU CONTAGEM EXATA ---
             surplus = total_quantity - total_saldo_sistema
-            
             for local_info in saldos_locais:
-                chave = (local_info['filial'], local_info['local'])
-                alocacoes_finais[chave] = local_info['saldo']
+                alocacoes_finais[(local_info['filial'], local_info['local'])] = local_info['saldo']
             
-            target_for_surplus = None
-            for local_info in saldos_locais:
-                if local_info['saldo'] == 0.0:
-                    target_for_surplus = (local_info['filial'], local_info['local'])
-                    break
-            
+            target_for_surplus = next(( (li['filial'], li['local']) for li in sorted(saldos_locais, key=lambda x: x['saldo'], reverse=True) if li['saldo'] > 0.0), None)
             if not target_for_surplus and saldos_locais:
                 target_for_surplus = (saldos_locais[0]['filial'], saldos_locais[0]['local'])
-
             if target_for_surplus:
                 alocacoes_finais[target_for_surplus] += surplus
-        
         else:
-            # --- LÓGICA CORRIGIDA PARA FALTA ---
             remaining_quantity = total_quantity
+            saldos_locais.sort(key=lambda x: x['saldo'], reverse=True)
             for local_info in saldos_locais:
-                chave = (local_info['filial'], local_info['local'])
-                
-                # Aloca a quantidade remanescente, até o limite do saldo do local
                 allocated = min(local_info['saldo'], remaining_quantity)
-                alocacoes_finais[chave] = allocated
+                alocacoes_finais[(local_info['filial'], local_info['local'])] = allocated
                 remaining_quantity -= allocated
-                
-                if remaining_quantity <= 0:
-                    break
-        
-        conn_inventario = get_db_connection(DB_INVENTARIO)
-        if not conn_inventario:
-            return jsonify({'error': 'Falha ao conectar ao banco de dados de inventário.'}), 500
-        cursor_inventario = conn_inventario.cursor()
-        
-        placeholders = ','.join(['?'] * len(filiais_do_grupo))
-        cursor_inventario.execute(f"DELETE FROM contagens WHERE sessao_id = ? AND codigo_item = ? AND filial IN ({placeholders})", sessao_id, item_code, *filiais_do_grupo)
+                if remaining_quantity <= 0: break
 
-        for local_info in saldos_locais:
-            chave = (local_info['filial'], local_info['local'])
-            quantidade_alocada = alocacoes_finais.get(chave, 0.0)
-
-            cursor_inventario.execute(
-                """
-                INSERT INTO contagens (sessao_id, usuario_id, codigo_item, filial, local, saldo_sistema, quantidade_contada, status_contagem, numero_contagem)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OK', 1)
-                """,
-                sessao_id, user_id, item_code,
-                local_info['filial'], local_info['local'],
-                local_info['saldo'], quantidade_alocada
-            )
+        if contagens_pendentes:
+            for pendente in contagens_pendentes:
+                quantidade_alocada = alocacoes_finais.get((pendente.filial, pendente.local), 0.0)
+                cursor_inv.execute("""
+                    UPDATE contagens SET quantidade_contada = ?, usuario_id = ?, data_contagem = GETDATE(), status_contagem = 'OK'
+                    WHERE id = ?
+                """, quantidade_alocada, user_id, pendente.id)
+        else:
+            cursor_inv.execute(f"DELETE FROM contagens WHERE sessao_id = ? AND codigo_item = ? AND filial IN ({placeholders})", sessao_id, item_code, *filiais_do_grupo)
+            for local_info in saldos_locais:
+                quantidade_alocada = alocacoes_finais.get((local_info['filial'], local_info['local']), 0.0)
+                cursor_inv.execute(
+                    """
+                    INSERT INTO contagens (sessao_id, usuario_id, codigo_item, filial, local, saldo_sistema, quantidade_contada, status_contagem, numero_contagem)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'OK', 1)
+                    """,
+                    sessao_id, user_id, item_code, local_info['filial'], local_info['local'], local_info['saldo'], quantidade_alocada
+                )
         
-        conn_inventario.commit()
-        conn_inventario.close()
-        conn_bi.close()
-
+        conn_inv.commit()
+        conn_inv.close()
         return jsonify({'success': f'Contagem de {total_quantity} unidades alocada com sucesso.'})
 
-    except ValueError:
-        return jsonify({'error': 'A quantidade total deve ser um número válido.'}), 400
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify({'error': f'Ocorreu um erro interno: {e}'}), 500
     

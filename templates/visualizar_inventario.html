@@ -52,50 +52,36 @@
                 </tr>
             </thead>
             <tbody class="bg-white">
-                {% for item_group in contagens_agrupadas %}
-                    {# --- Início da Lógica de Variáveis para o Grupo de Itens --- #}
-                    {% set item_info = item_group[0][0] %}
-                    
-                    {# Usamos uma lista para detetar a divergência de forma segura #}
-                    {% set difference_found = [] %}
-                    {% for location_group in item_group %}
-                        {% set ultima_contagem_local = location_group[-1] %}
-                        {% if ultima_contagem_local.diferenca != 0 %}
-                            {% if difference_found.append(1) %}{% endif %}
-                        {% endif %}
-                    {% endfor %}
-                    {# --- Fim da Lógica de Variáveis --- #}
-
-                    {# Linha de Cabeçalho para o Item #}
+                {% for item_processed in contagens_agrupadas %}
                     <tr class="bg-gray-50 border-t-2 border-b border-gray-300">
                         <td class="px-4 py-3 font-bold text-gray-800" colspan="7">
-                            <a href="{{ url_for('item_history', item_code=item_info.codigo_item) }}" class="text-blue-600 hover:underline">{{ item_info.codigo_item }}</a>
-                            <p class="text-xs text-gray-600 font-normal">{{ item_info.B1_DESC.strip() }}</p>
+                            {# --- CORREÇÃO AQUI --- #}
+                            <a href="{{ url_for('item_history', item_code=item_processed['item_info']['codigo_item']) }}" class="text-blue-600 hover:underline">{{ item_processed['item_info']['codigo_item'] }}</a>
+                            <p class="text-xs text-gray-600 font-normal">{{ item_processed['item_info']['B1_DESC'].strip() }}</p>
                         </td>
                         <td class="px-4 py-3 text-sm text-right">
-                            {# Lógica do Botão Único por Item #}
+                            {# --- Lógica de Ação Simplificada --- #}
                             {% if inventario.status == 'Aberto' %}
-                                {% if difference_found %} {# Se a lista não estiver vazia, há divergência #}
-                                    {% set ultima_contagem_geral = item_group[0][-1] %}
-                                    {% if ultima_contagem_geral.numero_contagem < 3 %}
-                                        <form action="{{ url_for('solicitar_recontagem', contagem_id=ultima_contagem_geral.id) }}" method="POST">
-                                            <button type="submit" class="text-orange-600 hover:text-orange-900 font-semibold">Solicitar {{ ultima_contagem_geral.numero_contagem + 1 }}ª Contagem</button>
-                                        </form>
-                                    {% else %}
-                                        <span class="text-gray-500">Limite Atingido</span>
-                                    {% endif %}
-                                {% else %}
+                                {% if item_processed.necessita_recontagem %}
+                                    <form action="{{ url_for('solicitar_recontagem', contagem_id=item_processed.id_para_recontagem) }}" method="POST">
+                                        <button type="submit" class="text-orange-600 hover:text-orange-900 font-semibold">Solicitar {{ item_processed.proximo_numero_contagem }}ª Contagem</button>
+                                    </form>
+                                {% elif item_processed.limite_atingido %}
+                                    <span class="text-gray-500">Limite Atingido</span>
+                                {% elif item_processed.tudo_ok %}
                                     <span class="text-green-600 font-semibold">OK</span>
+                                {% elif item_processed.pendente_geral %}
+                                    <span class="text-yellow-600 font-semibold">Pendente</span>
                                 {% endif %}
                             {% endif %}
                         </td>
                     </tr>
 
                     {# Linhas de Detalhe para cada Local do Item #}
-                    {% for location_group in item_group %}
+                    {% for location_group in item_processed.locations %}
                         {% for contagem in location_group %}
                         <tr class="{% if not loop.last %}border-b border-dashed border-gray-200{% else %}border-b border-gray-300{% endif %}">
-                            <td class="px-4 py-4"></td> {# Coluna vazia para alinhar com o cabeçalho do item #}
+                            <td class="px-4 py-4"></td>
                             
                             {% if loop.first %}
                                 <td class="px-4 py-4 text-sm text-gray-600 align-top" rowspan="{{ location_group|length }}">{{ contagem.filial }}/{{ contagem.local }}</td>
