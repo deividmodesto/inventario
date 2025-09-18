@@ -295,19 +295,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const countsToSend = [];
+        let hasAtLeastOneCount = false;
         document.querySelectorAll('[data-location-item]').forEach(item => {
             const countedQtyInput = item.querySelector('.counted-qty-input');
-            const countedQty = countedQtyInput.value;
-            if (countedQty !== null && countedQty.trim() !== '') {
-                countsToSend.push({
-                    codigo_item: currentItemCode,
-                    filial: item.dataset.filial,
-                    local: item.dataset.local,
-                    quantidade_contada: parseFloat(countedQty),
-                    saldo_sistema: parseFloat(item.dataset.saldo)
-                });
+            const countedQtyValue = countedQtyInput.value.trim();
+
+            // Considera campos vazios como 0, mas verifica se pelo menos um foi preenchido
+            const quantidade = (countedQtyValue === '') ? 0 : parseFloat(countedQtyValue);
+            if (countedQtyValue !== '') {
+                hasAtLeastOneCount = true;
             }
+
+            countsToSend.push({
+                codigo_item: currentItemCode,
+                filial: item.dataset.filial,
+                local: item.dataset.local,
+                quantidade_contada: quantidade,
+                saldo_sistema: parseFloat(item.dataset.saldo)
+            });
         });
+
+        // Apenas envie se o usuário tiver inserido pelo menos uma quantidade
+        if (!hasAtLeastOneCount) {
+            showMessage('info', 'Nenhuma quantidade foi preenchida. Insira a quantidade para pelo menos um local.');
+            return;
+        }
 
         if (countsToSend.length === 0) {
             showMessage('info', 'Nenhuma quantidade foi preenchida.');
